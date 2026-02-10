@@ -19,20 +19,7 @@ const mockAuth = {
   },
   token: "dev-token",
   isAuthenticated: true,
-  permissions: [
-    "release:view",
-    "release:create",
-    "release:edit",
-    "release:delete",
-    "template:view",
-    "template:create",
-    "template:edit",
-    "template:delete",
-    "history:view",
-    "history:create",
-    "history:edit",
-    "history:delete",
-  ],
+  permissions: [],
 };
 
 const mockProps = {

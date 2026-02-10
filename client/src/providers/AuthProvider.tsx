@@ -20,6 +20,7 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children, auth, navigate }: AuthProviderProps) {
   const permissions = auth?.permissions || [];
+  const hasExplicitPermissions = Array.isArray(auth?.permissions) && auth.permissions.length > 0;
 
   const value: AuthContextValue = {
     user: auth?.user || null,
@@ -27,7 +28,7 @@ export function AuthProvider({ children, auth, navigate }: AuthProviderProps) {
     permissions,
     isAuthenticated: auth?.isAuthenticated || false,
     navigate: navigate || ((path: string) => console.warn("Navigate not provided:", path)),
-    hasPermission: (permission: string) => permissions.includes(permission),
+    hasPermission: (permission: string) => hasExplicitPermissions ? permissions.includes(permission) : true,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

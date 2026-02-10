@@ -7,6 +7,7 @@ import { ReleaseHistoriesModule } from './release-histories/release-histories.mo
 import { ReleasesModule } from './releases/releases.module';
 import { ReferenceDataModule } from './reference-data/reference-data.module';
 import { PermissionsModule } from './permissions/permissions.module';
+import { HealthModule } from './health/health.module';
 import { PermissionGuard } from './guards/permission.guard';
 
 @Module({
@@ -18,6 +19,7 @@ import { PermissionGuard } from './guards/permission.guard';
     ReleasesModule,
     ReferenceDataModule,
     PermissionsModule,
+    HealthModule,
   ],
   providers: [
     {

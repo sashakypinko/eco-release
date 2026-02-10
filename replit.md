@@ -14,8 +14,8 @@ A full-stack Release Management System that connects to an external MySQL databa
 
 ### Module Federation
 - `client/src/App.tsx` - RemoteApp module with `mount(container, props)` and `unmount(container)` lifecycle methods
-- `client/src/AppContent.tsx` - Actual UI (Redux Provider, sidebar, routing, theme) wrapped by providers
-- `client/src/bootstrap.tsx` - Standalone dev mode with mock auth context
+- `client/src/AppContent.tsx` - Routes and Redux store only (no sidebar/header) — used by both federation and standalone modes
+- `client/src/bootstrap.tsx` - Standalone dev mode: wraps AppContent with sidebar, header, theme toggle, and mock auth
 - `client/src/main.tsx` - Dynamic import of bootstrap for Module Federation compatibility
 - `vite.federation.config.ts` - Separate Vite config for federation build (exposes `./App`)
 
@@ -100,7 +100,7 @@ A full-stack Release Management System that connects to an external MySQL databa
 
 ## Key Files (Frontend)
 - `client/src/App.tsx` - RemoteApp module (mount/unmount) for Module Federation
-- `client/src/AppContent.tsx` - Main UI with Redux Provider, sidebar layout, wouter routing
+- `client/src/AppContent.tsx` - Routes and Redux store (no sidebar/header — those are in bootstrap.tsx for standalone mode only)
 - `client/src/bootstrap.tsx` - Standalone dev bootstrap with mock auth
 - `client/src/main.tsx` - Dynamic import entry for Module Federation
 - `client/src/app/store.ts` - Redux store with RTK Query APIs and feature slices

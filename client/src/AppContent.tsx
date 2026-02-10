@@ -1,4 +1,5 @@
-import { Switch, Route, useLocation } from "wouter";
+import { Switch, Route, Router, useLocation } from "wouter";
+import { useHashLocation } from "wouter/use-hash-location";
 import { useEffect } from "react";
 import { Provider } from "react-redux";
 import { store } from "@/app/store";
@@ -11,7 +12,7 @@ import ReleaseFormPage from "@/features/releases/ReleaseFormPage";
 import HistoryFormPage from "@/features/releases/HistoryFormPage";
 import TemplatesPage from "@/features/templates/TemplatesPage";
 
-function Router() {
+function Routes() {
   return (
     <Switch>
       <Route path="/" component={ReleasesListPage} />
@@ -26,7 +27,7 @@ function Router() {
   );
 }
 
-export function AppContent() {
+function NavigationListener() {
   const [, setLocation] = useLocation();
 
   useEffect(() => {
@@ -42,10 +43,21 @@ export function AppContent() {
     return () => window.removeEventListener("releaseManagerNavigate", handleNavigate);
   }, [setLocation]);
 
+  return null;
+}
+
+interface AppContentProps {
+  hashRouting?: boolean;
+}
+
+export function AppContent({ hashRouting = false }: AppContentProps) {
   return (
     <Provider store={store}>
       <TooltipProvider>
-        <Router />
+        <Router hook={hashRouting ? useHashLocation : undefined}>
+          <NavigationListener />
+          <Routes />
+        </Router>
         <Toaster />
       </TooltipProvider>
     </Provider>

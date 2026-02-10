@@ -22,7 +22,7 @@ const App: RemoteApp = {
     root.render(
       <ApiProvider baseUrl={apiBaseUrl} token={auth.token} permissions={auth.permissions}>
         <AuthProvider auth={auth} navigate={navigate}>
-          <AppContent />
+          <AppContent hashRouting />
         </AuthProvider>
       </ApiProvider>
     );

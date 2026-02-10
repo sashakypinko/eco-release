@@ -1,4 +1,5 @@
 import { Plus, ListChecks, Trash2, Edit, GripVertical, X, Save, Loader2 } from "lucide-react";
+import { useAuth } from "@/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -24,6 +25,7 @@ import {
 
 export default function TemplatesPage() {
   const { toast } = useToast();
+  const { hasPermission } = useAuth();
   const dispatch = useAppDispatch();
   const { editingTemplateId, editName, editItems, createDialogOpen, newName } = useAppSelector((s) => s.templates);
 
@@ -87,7 +89,7 @@ export default function TemplatesPage() {
           <h1 className="text-2xl font-semibold" data-testid="text-page-title">Checklist Templates</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage reusable checklist templates for releases</p>
         </div>
-        <Dialog open={createDialogOpen} onOpenChange={(open) => dispatch(setCreateDialogOpen(open))}>
+        {hasPermission("template:create") && <Dialog open={createDialogOpen} onOpenChange={(open) => dispatch(setCreateDialogOpen(open))}>
           <DialogTrigger asChild>
             <Button data-testid="button-create-template">
               <Plus className="w-4 h-4 mr-2" />
@@ -116,7 +118,7 @@ export default function TemplatesPage() {
               </Button>
             </DialogFooter>
           </DialogContent>
-        </Dialog>
+        </Dialog>}
       </div>
 
       {isLoading ? (
@@ -163,29 +165,33 @@ export default function TemplatesPage() {
                     </>
                   ) : (
                     <>
-                      <Button size="sm" variant="outline" onClick={() => handleStartEditing(template)} data-testid={`button-edit-template-${template.id}`}>
-                        <Edit className="w-3 h-3 mr-1" />
-                        Edit
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button size="sm" variant="destructive" data-testid={`button-delete-template-${template.id}`}>
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete Template</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This will permanently delete "{template.name}" and all its items. This cannot be undone.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDelete(template.id)}>Delete</AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                      {hasPermission("template:edit") && (
+                        <Button size="sm" variant="outline" onClick={() => handleStartEditing(template)} data-testid={`button-edit-template-${template.id}`}>
+                          <Edit className="w-3 h-3 mr-1" />
+                          Edit
+                        </Button>
+                      )}
+                      {hasPermission("template:delete") && (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button size="sm" variant="destructive" data-testid={`button-delete-template-${template.id}`}>
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Template</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This will permanently delete "{template.name}" and all its items. This cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDelete(template.id)}>Delete</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      )}
                     </>
                   )}
                 </div>

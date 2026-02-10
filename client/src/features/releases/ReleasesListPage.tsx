@@ -1,5 +1,6 @@
 import { useLocation } from "wouter";
 import { Plus, Search, X, ExternalLink, Calendar, User, ChevronLeft, ChevronRight } from "lucide-react";
+import { useAuth } from "@/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -16,6 +17,7 @@ import { useGetProductsQuery } from "@/features/reference-data/api";
 
 export default function ReleasesListPage() {
   const [, navigate] = useLocation();
+  const { hasPermission } = useAuth();
   const dispatch = useAppDispatch();
   const { search, statusFilter, productFilter, page, pageSize } = useAppSelector((s) => s.releases);
 
@@ -39,10 +41,12 @@ export default function ReleasesListPage() {
           <h1 className="text-2xl font-semibold" data-testid="text-page-title">Releases</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage your software releases and deployments</p>
         </div>
-        <Button onClick={() => navigate("/releases/new")} data-testid="button-create-release">
-          <Plus className="w-4 h-4 mr-2" />
-          New Release
-        </Button>
+        {hasPermission("release:create") && (
+          <Button onClick={() => navigate("/releases/new")} data-testid="button-create-release">
+            <Plus className="w-4 h-4 mr-2" />
+            New Release
+          </Button>
+        )}
       </div>
 
       <Card className="p-4">
@@ -170,9 +174,11 @@ export default function ReleasesListPage() {
                     <div className="flex flex-col items-center gap-2">
                       <RocketIcon className="w-10 h-10 text-muted-foreground/50" />
                       <p className="text-muted-foreground">No releases found</p>
-                      <Button variant="outline" size="sm" onClick={() => navigate("/releases/new")} data-testid="button-create-first-release">
-                        Create your first release
-                      </Button>
+                      {hasPermission("release:create") && (
+                        <Button variant="outline" size="sm" onClick={() => navigate("/releases/new")} data-testid="button-create-first-release">
+                          Create your first release
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>

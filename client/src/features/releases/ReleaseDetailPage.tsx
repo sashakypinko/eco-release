@@ -4,6 +4,7 @@ import {
   ArrowLeft, Edit, Trash2, Plus, ExternalLink, Calendar, User, Server,
   CheckCircle2, Circle, Clock, Video, FileText, ChevronDown, ChevronUp,
 } from "lucide-react";
+import { useAuth } from "@/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +25,7 @@ export default function ReleaseDetailPage() {
   const params = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { hasPermission } = useAuth();
   const [expandedHistory, setExpandedHistory] = useState<number | null>(null);
 
   const { data: releaseData, isLoading } = useGetReleaseByIdQuery(params.id!);
@@ -96,32 +98,36 @@ export default function ReleaseDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => navigate(`/releases/${release.id}/edit`)} data-testid="button-edit-release">
-            <Edit className="w-4 h-4 mr-2" />
-            Edit
-          </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" data-testid="button-delete-release">
-                <Trash2 className="w-4 h-4 mr-2" />
-                Delete
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete Release</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will permanently delete release v{release.version} and all its history records. This action cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDelete} data-testid="button-confirm-delete">
+          {hasPermission("release:edit") && (
+            <Button variant="outline" onClick={() => navigate(`/releases/${release.id}/edit`)} data-testid="button-edit-release">
+              <Edit className="w-4 h-4 mr-2" />
+              Edit
+            </Button>
+          )}
+          {hasPermission("release:delete") && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" data-testid="button-delete-release">
+                  <Trash2 className="w-4 h-4 mr-2" />
                   Delete
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Release</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete release v{release.version} and all its history records. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDelete} data-testid="button-confirm-delete">
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
         </div>
       </div>
 
@@ -188,6 +194,7 @@ export default function ReleaseDetailPage() {
                       <Checkbox
                         checked={item.done}
                         onCheckedChange={(checked) => handleToggleChecklist(item.id, !!checked)}
+                        disabled={!hasPermission("release:edit")}
                         data-testid={`checkbox-item-${item.id}`}
                       />
                       <span className={`text-sm flex-1 ${item.done ? "line-through text-muted-foreground" : ""}`}>
@@ -208,15 +215,17 @@ export default function ReleaseDetailPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-4 pb-3">
               <h3 className="font-semibold">Release History</h3>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => navigate(`/releases/${release.id}/history/new`)}
-                data-testid="button-add-history"
-              >
-                <Plus className="w-4 h-4 mr-1" />
-                Add Entry
-              </Button>
+              {hasPermission("history:create") && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => navigate(`/releases/${release.id}/history/new`)}
+                  data-testid="button-add-history"
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  Add Entry
+                </Button>
+              )}
             </CardHeader>
             <CardContent>
               {release.histories && release.histories.length > 0 ? (
@@ -228,6 +237,7 @@ export default function ReleaseDetailPage() {
                       releaseId={release.id}
                       expanded={expandedHistory === history.id}
                       onToggle={() => setExpandedHistory(expandedHistory === history.id ? null : history.id)}
+                      canEdit={hasPermission("history:edit")}
                     />
                   ))}
                 </div>
@@ -327,7 +337,7 @@ function DetailField({ label, value, icon }: { label: string; value: string; ico
   );
 }
 
-function HistoryCard({ history, releaseId, expanded, onToggle }: { history: ReleaseHistory; releaseId: number; expanded: boolean; onToggle: () => void }) {
+function HistoryCard({ history, releaseId, expanded, onToggle, canEdit }: { history: ReleaseHistory; releaseId: number; expanded: boolean; onToggle: () => void; canEdit: boolean }) {
   const [, navigate] = useLocation();
   const checkedCount = history.checklistItems?.filter((i) => i.done).length || 0;
   const totalCount = history.checklistItems?.length || 0;
@@ -348,14 +358,16 @@ function HistoryCard({ history, releaseId, expanded, onToggle }: { history: Rele
           )}
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={(e) => { e.stopPropagation(); navigate(`/releases/${releaseId}/history/${history.id}/edit`); }}
-            data-testid={`button-edit-history-${history.id}`}
-          >
-            <Edit className="w-3 h-3" />
-          </Button>
+          {canEdit && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={(e) => { e.stopPropagation(); navigate(`/releases/${releaseId}/history/${history.id}/edit`); }}
+              data-testid={`button-edit-history-${history.id}`}
+            >
+              <Edit className="w-3 h-3" />
+            </Button>
+          )}
           {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         </div>
       </button>

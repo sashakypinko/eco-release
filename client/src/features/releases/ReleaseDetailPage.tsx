@@ -5,6 +5,7 @@ import {
   CheckCircle2, Circle, Clock, Video, FileText, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
+import { useContainer } from "@/providers/ContainerProvider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -309,17 +310,19 @@ export default function ReleaseDetailPage() {
 }
 
 function ReleaseVideoCard({ videoUrl }: { videoUrl: string }) {
+  const { container } = useContainer();
   const [theme, setTheme] = useState<"dark" | "light">(() =>
-    document.documentElement.classList.contains("dark") ? "dark" : "light"
+    container?.classList.contains("dark") ? "dark" : "light"
   );
 
   useEffect(() => {
+    if (!container) return;
     const observer = new MutationObserver(() => {
-      setTheme(document.documentElement.classList.contains("dark") ? "dark" : "light");
+      setTheme(container.classList.contains("dark") ? "dark" : "light");
     });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    observer.observe(container, { attributes: true, attributeFilter: ["class"] });
     return () => observer.disconnect();
-  }, []);
+  }, [container]);
 
   const videoIdMatch = videoUrl.match(/(\d+)\s*$/);
   const videoId = videoIdMatch ? videoIdMatch[1] : null;

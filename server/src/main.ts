@@ -12,11 +12,23 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const isDev = process.env.NODE_ENV === 'development';
 
+  app.enableCors({
+    origin: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Permissions'],
+    credentials: true,
+  });
+
   app.setGlobalPrefix('api');
   app.use(express.json());
   app.use(cookieParser());
 
   const spaFilter = new SpaFallbackFilter();
+
+  const federationPath = path.join(process.cwd(), 'dist/public/assets');
+  if (fs.existsSync(federationPath)) {
+    app.use('/assets', express.static(federationPath));
+  }
 
   if (!isDev) {
     const staticPath = path.join(process.cwd(), 'dist/public');

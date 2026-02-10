@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import { statusVariant, environmentVariant } from "@/lib/constants";
+import { statusVariant, environmentVariant } from "@/shared/constants";
 
 export function StatusBadge({ status }: { status: string | null | undefined }) {
   if (!status) return <Badge variant="secondary">Unknown</Badge>;

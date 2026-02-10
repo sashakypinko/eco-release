@@ -1,20 +1,20 @@
 import { useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation, useParams } from "wouter";
 import { ArrowLeft, Save, Loader2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient, apiRequest } from "@/lib/queryClient";
-import { ENVIRONMENT_OPTIONS, STATUS_OPTIONS } from "@/lib/constants";
+import { ENVIRONMENT_OPTIONS, STATUS_OPTIONS } from "@/shared/constants";
+import { useGetReleaseByIdQuery, useCreateReleaseMutation, useUpdateReleaseMutation } from "./api";
+import { useGetProductsQuery, useGetUsersQuery, useGetWorkOrdersQuery } from "@/features/reference-data/api";
 
 const releaseFormSchema = z.object({
   version: z.string().min(1, "Version is required"),
@@ -37,13 +37,9 @@ export default function ReleaseFormPage() {
   const { toast } = useToast();
   const isEdit = !!params.id;
 
-  const { data: releaseData, isLoading: releaseLoading } = useQuery<{ release: any }>({
-    queryKey: ["/api/releases", params.id],
-    enabled: isEdit,
-  });
-
-  const { data: productsData } = useQuery<any[]>({ queryKey: ["/api/products"] });
-  const { data: usersData } = useQuery<any[]>({ queryKey: ["/api/users"] });
+  const { data: releaseData, isLoading: releaseLoading } = useGetReleaseByIdQuery(params.id!, { skip: !isEdit });
+  const { data: productsData } = useGetProductsQuery();
+  const { data: usersData } = useGetUsersQuery();
 
   const form = useForm<ReleaseFormValues>({
     resolver: zodResolver(releaseFormSchema),
@@ -63,10 +59,7 @@ export default function ReleaseFormPage() {
 
   const selectedProductId = form.watch("productId");
 
-  const { data: workOrdersData } = useQuery<any[]>({
-    queryKey: [`/api/work-orders?product_id=${selectedProductId}`],
-    enabled: !!selectedProductId,
-  });
+  const { data: workOrdersData } = useGetWorkOrdersQuery(selectedProductId!, { skip: !selectedProductId });
 
   useEffect(() => {
     if (releaseData?.release) {
@@ -86,43 +79,37 @@ export default function ReleaseFormPage() {
     }
   }, [releaseData, form]);
 
-  const mutation = useMutation({
-    mutationFn: async (values: ReleaseFormValues) => {
-      const body: any = {
-        version: values.version,
-        description: values.description || null,
-        environment: values.environment,
-        status: values.status,
-        projectJiraIssue: values.projectJiraIssue || null,
-        customerContact: values.customerContact || null,
-        plannedReleaseDate: values.plannedReleaseDate || null,
-        productId: values.productId ? Number(values.productId) : null,
-        workOrderId: values.workOrderId ? Number(values.workOrderId) : null,
-        userId: values.userId ? Number(values.userId) : null,
-      };
+  const [createRelease, { isLoading: isCreating }] = useCreateReleaseMutation();
+  const [updateRelease, { isLoading: isUpdating }] = useUpdateReleaseMutation();
+  const isPending = isCreating || isUpdating;
 
-      const res = isEdit
-        ? await apiRequest("PUT", `/api/releases/${params.id}`, body)
-        : await apiRequest("POST", "/api/releases", body);
-      return res.json();
-    },
-    onSuccess: (data: any) => {
-      toast({ title: isEdit ? "Release updated" : "Release created" });
-      queryClient.invalidateQueries({ queryKey: ["/api/releases"] });
+  const onSubmit = async (values: ReleaseFormValues) => {
+    const body: any = {
+      version: values.version,
+      description: values.description || null,
+      environment: values.environment,
+      status: values.status,
+      projectJiraIssue: values.projectJiraIssue || null,
+      customerContact: values.customerContact || null,
+      plannedReleaseDate: values.plannedReleaseDate || null,
+      productId: values.productId ? Number(values.productId) : null,
+      workOrderId: values.workOrderId ? Number(values.workOrderId) : null,
+      userId: values.userId ? Number(values.userId) : null,
+    };
+
+    try {
       if (isEdit) {
-        queryClient.invalidateQueries({ queryKey: ["/api/releases", params.id] });
+        await updateRelease({ id: params.id!, body }).unwrap();
+        toast({ title: "Release updated" });
         navigate(`/releases/${params.id}`);
       } else {
+        const data = await createRelease(body).unwrap();
+        toast({ title: "Release created" });
         navigate(`/releases/${data.release?.id || ""}`);
       }
-    },
-    onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
-    },
-  });
-
-  const onSubmit = (values: ReleaseFormValues) => {
-    mutation.mutate(values);
+    } catch (err: any) {
+      toast({ title: "Error", description: err?.data?.message || "Failed to save", variant: "destructive" });
+    }
   };
 
   if (isEdit && releaseLoading) {
@@ -165,7 +152,7 @@ export default function ReleaseFormPage() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {productsData?.map((p: any) => (
+                        {productsData?.map((p) => (
                           <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
                         ))}
                       </SelectContent>
@@ -184,7 +171,7 @@ export default function ReleaseFormPage() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {workOrdersData?.map((wo: any) => (
+                        {workOrdersData?.map((wo) => (
                           <SelectItem key={wo.id} value={String(wo.id)}>{wo.title || `WO-${wo.id}`}</SelectItem>
                         ))}
                       </SelectContent>
@@ -297,7 +284,7 @@ export default function ReleaseFormPage() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {usersData?.map((u: any) => (
+                        {usersData?.map((u) => (
                           <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
                         ))}
                       </SelectContent>
@@ -311,8 +298,8 @@ export default function ReleaseFormPage() {
                 <Button type="button" variant="outline" onClick={() => navigate(isEdit ? `/releases/${params.id}` : "/")} data-testid="button-cancel">
                   Cancel
                 </Button>
-                <Button type="submit" disabled={mutation.isPending} data-testid="button-save">
-                  {mutation.isPending ? (
+                <Button type="submit" disabled={isPending} data-testid="button-save">
+                  {isPending ? (
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   ) : (
                     <Save className="w-4 h-4 mr-2" />

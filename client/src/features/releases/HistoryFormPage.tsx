@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation, useParams } from "wouter";
 import { ArrowLeft, Save, Loader2 } from "lucide-react";
 import { useForm } from "react-hook-form";
@@ -11,10 +10,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient, apiRequest } from "@/lib/queryClient";
-import { ENVIRONMENT_OPTIONS, STATUS_OPTIONS, SMOKE_TEST_OPTIONS } from "@/lib/constants";
+import { ENVIRONMENT_OPTIONS, STATUS_OPTIONS, SMOKE_TEST_OPTIONS } from "@/shared/constants";
+import { toDateTimeInputValue } from "@/shared/utils";
+import { useGetReleaseByIdQuery, useCreateHistoryMutation, useUpdateHistoryMutation } from "./api";
+import { useGetUsersQuery } from "@/features/reference-data/api";
 
 const historyFormSchema = z.object({
   status: z.string().min(1, "Status is required"),
@@ -41,14 +41,11 @@ export default function HistoryFormPage() {
   const isEdit = !!params.historyId;
   const releaseId = Number(params.id);
 
-  const { data: usersData } = useQuery<any[]>({ queryKey: ["/api/users"] });
-
-  const { data: releaseData } = useQuery<{ release: any }>({
-    queryKey: ["/api/releases", params.id],
-  });
+  const { data: usersData } = useGetUsersQuery();
+  const { data: releaseData } = useGetReleaseByIdQuery(params.id!);
 
   const existingHistory = isEdit
-    ? releaseData?.release?.histories?.find((h: any) => h.id === Number(params.historyId))
+    ? releaseData?.release?.histories?.find((h) => h.id === Number(params.historyId))
     : null;
 
   const form = useForm<HistoryFormValues>({
@@ -77,14 +74,14 @@ export default function HistoryFormPage() {
         environment: existingHistory.environment || "prod",
         releaseManagerUserId: existingHistory.releaseManagerUserId ? String(existingHistory.releaseManagerUserId) : "",
         approvedByUserId: existingHistory.approvedByUserId ? String(existingHistory.approvedByUserId) : "",
-        dateOfApproval: existingHistory.dateOfApproval ? new Date(existingHistory.dateOfApproval).toISOString().slice(0, 16) : "",
+        dateOfApproval: toDateTimeInputValue(existingHistory.dateOfApproval),
         comment: existingHistory.comment || "",
         server: existingHistory.server || "",
         port: existingHistory.port ? String(existingHistory.port) : "",
-        releaseDate: existingHistory.releaseDate ? new Date(existingHistory.releaseDate).toISOString().slice(0, 16) : "",
+        releaseDate: toDateTimeInputValue(existingHistory.releaseDate),
         releaseNotes: existingHistory.releaseNotes || "",
         releaseVideo: existingHistory.releaseVideo || "",
-        smokeTestDate: existingHistory.smokeTestDate ? new Date(existingHistory.smokeTestDate).toISOString().slice(0, 16) : "",
+        smokeTestDate: toDateTimeInputValue(existingHistory.smokeTestDate),
         smokeTestResult: existingHistory.smokeTestResult || "",
       });
     } else if (releaseData?.release && !isEdit) {
@@ -93,39 +90,41 @@ export default function HistoryFormPage() {
     }
   }, [existingHistory, releaseData, isEdit, form]);
 
-  const mutation = useMutation({
-    mutationFn: async (values: HistoryFormValues) => {
-      const body: any = {
-        releaseId,
-        status: values.status,
-        environment: values.environment,
-        releaseManagerUserId: Number(values.releaseManagerUserId),
-        approvedByUserId: values.approvedByUserId ? Number(values.approvedByUserId) : null,
-        dateOfApproval: values.dateOfApproval ? new Date(values.dateOfApproval) : null,
-        comment: values.comment || null,
-        server: values.server || null,
-        port: values.port ? Number(values.port) : null,
-        releaseDate: values.releaseDate ? new Date(values.releaseDate) : null,
-        releaseNotes: values.releaseNotes || null,
-        releaseVideo: values.releaseVideo || null,
-        smokeTestDate: values.smokeTestDate ? new Date(values.smokeTestDate) : null,
-        smokeTestResult: values.smokeTestResult || null,
-      };
+  const [createHistory, { isLoading: isCreating }] = useCreateHistoryMutation();
+  const [updateHistory, { isLoading: isUpdating }] = useUpdateHistoryMutation();
+  const isPending = isCreating || isUpdating;
 
-      const res = isEdit
-        ? await apiRequest("PUT", `/api/release-histories/${params.historyId}`, body)
-        : await apiRequest("POST", "/api/release-histories", body);
-      return res.json();
-    },
-    onSuccess: () => {
-      toast({ title: isEdit ? "History updated" : "History entry created" });
-      queryClient.invalidateQueries({ queryKey: ["/api/releases", params.id] });
+  const onSubmit = async (values: HistoryFormValues) => {
+    const body: any = {
+      releaseId,
+      status: values.status,
+      environment: values.environment,
+      releaseManagerUserId: Number(values.releaseManagerUserId),
+      approvedByUserId: values.approvedByUserId ? Number(values.approvedByUserId) : null,
+      dateOfApproval: values.dateOfApproval ? new Date(values.dateOfApproval) : null,
+      comment: values.comment || null,
+      server: values.server || null,
+      port: values.port ? Number(values.port) : null,
+      releaseDate: values.releaseDate ? new Date(values.releaseDate) : null,
+      releaseNotes: values.releaseNotes || null,
+      releaseVideo: values.releaseVideo || null,
+      smokeTestDate: values.smokeTestDate ? new Date(values.smokeTestDate) : null,
+      smokeTestResult: values.smokeTestResult || null,
+    };
+
+    try {
+      if (isEdit) {
+        await updateHistory({ id: params.historyId!, body }).unwrap();
+        toast({ title: "History updated" });
+      } else {
+        await createHistory(body).unwrap();
+        toast({ title: "History entry created" });
+      }
       navigate(`/releases/${releaseId}`);
-    },
-    onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
-    },
-  });
+    } catch (err: any) {
+      toast({ title: "Error", description: err?.data?.message || "Failed to save", variant: "destructive" });
+    }
+  };
 
   return (
     <div className="p-6 space-y-6 max-w-3xl">
@@ -146,7 +145,7 @@ export default function HistoryFormPage() {
       <Card>
         <CardContent className="pt-6">
           <Form {...form}>
-            <form onSubmit={form.handleSubmit((v) => mutation.mutate(v))} className="space-y-5">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField control={form.control} name="status" render={({ field }) => (
                   <FormItem>
@@ -182,7 +181,7 @@ export default function HistoryFormPage() {
                     <Select value={field.value} onValueChange={field.onChange}>
                       <FormControl><SelectTrigger data-testid="select-release-manager"><SelectValue placeholder="Select manager" /></SelectTrigger></FormControl>
                       <SelectContent>
-                        {usersData?.map((u: any) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
+                        {usersData?.map((u) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -195,7 +194,7 @@ export default function HistoryFormPage() {
                     <Select value={field.value} onValueChange={field.onChange}>
                       <FormControl><SelectTrigger data-testid="select-approved-by"><SelectValue placeholder="Select user" /></SelectTrigger></FormControl>
                       <SelectContent>
-                        {usersData?.map((u: any) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
+                        {usersData?.map((u) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -288,8 +287,8 @@ export default function HistoryFormPage() {
                 <Button type="button" variant="outline" onClick={() => navigate(`/releases/${releaseId}`)} data-testid="button-cancel">
                   Cancel
                 </Button>
-                <Button type="submit" disabled={mutation.isPending} data-testid="button-save">
-                  {mutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                <Button type="submit" disabled={isPending} data-testid="button-save">
+                  {isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
                   {isEdit ? "Update" : "Create"} Entry
                 </Button>
               </div>

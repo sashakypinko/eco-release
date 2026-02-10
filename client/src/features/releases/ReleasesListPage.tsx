@@ -1,49 +1,34 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Plus, Search, X, Filter, ExternalLink, Calendar, User, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Search, X, ExternalLink, Calendar, User, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { StatusBadge, EnvironmentBadge } from "@/components/status-badge";
-import { STATUS_OPTIONS } from "@/lib/constants";
-import { format } from "date-fns";
+import { StatusBadge, EnvironmentBadge } from "@/shared/StatusBadge";
+import { STATUS_OPTIONS } from "@/shared/constants";
+import { formatDate } from "@/shared/utils";
+import { useAppDispatch, useAppSelector } from "@/app/hooks";
+import { setSearch, setStatusFilter, setProductFilter, setPage, clearFilters } from "./slice";
+import { useGetReleasesQuery } from "./api";
+import { useGetProductsQuery } from "@/features/reference-data/api";
 
 export default function ReleasesListPage() {
   const [, navigate] = useLocation();
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [productFilter, setProductFilter] = useState("all");
-  const [page, setPage] = useState(1);
+  const dispatch = useAppDispatch();
+  const { search, statusFilter, productFilter, page, pageSize } = useAppSelector((s) => s.releases);
 
-  const { data: productsData } = useQuery<any[]>({ queryKey: ["/api/products"] });
+  const { data: productsData } = useGetProductsQuery();
 
   const queryParams = new URLSearchParams();
   queryParams.set("page", String(page));
-  queryParams.set("page_size", "25");
+  queryParams.set("page_size", String(pageSize));
   if (search) queryParams.set("search", search);
   if (statusFilter !== "all") queryParams.set("status", statusFilter);
   if (productFilter !== "all") queryParams.set("product_id", productFilter);
 
-  const { data, isLoading } = useQuery<{
-    data: any[];
-    total: number;
-    page: number;
-    pageSize: number;
-    totalPages: number;
-  }>({
-    queryKey: [`/api/releases?${queryParams.toString()}`],
-  });
-
-  const clearFilters = () => {
-    setSearch("");
-    setStatusFilter("all");
-    setProductFilter("all");
-    setPage(1);
-  };
+  const { data, isLoading } = useGetReleasesQuery(queryParams.toString());
 
   const hasFilters = search || statusFilter !== "all" || productFilter !== "all";
 
@@ -67,12 +52,12 @@ export default function ReleasesListPage() {
             <Input
               placeholder="Search by version..."
               value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              onChange={(e) => dispatch(setSearch(e.target.value))}
               className="pl-9"
               data-testid="input-search"
             />
           </div>
-          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
+          <Select value={statusFilter} onValueChange={(v) => dispatch(setStatusFilter(v))}>
             <SelectTrigger className="w-[220px]" data-testid="select-status-filter">
               <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
@@ -83,19 +68,19 @@ export default function ReleasesListPage() {
               ))}
             </SelectContent>
           </Select>
-          <Select value={productFilter} onValueChange={(v) => { setProductFilter(v); setPage(1); }}>
+          <Select value={productFilter} onValueChange={(v) => dispatch(setProductFilter(v))}>
             <SelectTrigger className="w-[200px]" data-testid="select-product-filter">
               <SelectValue placeholder="Filter by product" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Products</SelectItem>
-              {productsData?.map((p: any) => (
+              {productsData?.map((p) => (
                 <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
           {hasFilters && (
-            <Button variant="ghost" size="sm" onClick={clearFilters} data-testid="button-clear-filters">
+            <Button variant="ghost" size="sm" onClick={() => dispatch(clearFilters())} data-testid="button-clear-filters">
               <X className="w-4 h-4 mr-1" />
               Clear
             </Button>
@@ -128,7 +113,7 @@ export default function ReleasesListPage() {
                   </TableRow>
                 ))
               ) : data?.data && data.data.length > 0 ? (
-                data.data.map((release: any) => (
+                data.data.map((release) => (
                   <TableRow
                     key={release.id}
                     className="cursor-pointer hover-elevate"
@@ -136,7 +121,7 @@ export default function ReleasesListPage() {
                     data-testid={`row-release-${release.id}`}
                   >
                     <TableCell className="font-mono text-muted-foreground">{release.id}</TableCell>
-                    <TableCell className="font-medium">{release.product?.name || "—"}</TableCell>
+                    <TableCell className="font-medium">{release.product?.name || "\u2014"}</TableCell>
                     <TableCell className="font-mono">{release.version}</TableCell>
                     <TableCell><EnvironmentBadge env={release.environment} /></TableCell>
                     <TableCell><StatusBadge status={release.latestStatus} /></TableCell>
@@ -154,17 +139,17 @@ export default function ReleasesListPage() {
                           Jira
                         </a>
                       ) : (
-                        <span className="text-muted-foreground">—</span>
+                        <span className="text-muted-foreground">\u2014</span>
                       )}
                     </TableCell>
                     <TableCell>
                       {release.plannedReleaseDate ? (
                         <span className="text-sm inline-flex items-center gap-1">
                           <Calendar className="w-3 h-3 text-muted-foreground" />
-                          {format(new Date(release.plannedReleaseDate), "MMM d, yyyy")}
+                          {formatDate(release.plannedReleaseDate)}
                         </span>
                       ) : (
-                        <span className="text-muted-foreground">—</span>
+                        <span className="text-muted-foreground">\u2014</span>
                       )}
                     </TableCell>
                     <TableCell>
@@ -174,7 +159,7 @@ export default function ReleasesListPage() {
                           {release.user.name}
                         </span>
                       ) : (
-                        <span className="text-muted-foreground">—</span>
+                        <span className="text-muted-foreground">\u2014</span>
                       )}
                     </TableCell>
                   </TableRow>
@@ -183,7 +168,7 @@ export default function ReleasesListPage() {
                 <TableRow>
                   <TableCell colSpan={8} className="text-center py-12">
                     <div className="flex flex-col items-center gap-2">
-                      <Rocket className="w-10 h-10 text-muted-foreground/50" />
+                      <RocketIcon className="w-10 h-10 text-muted-foreground/50" />
                       <p className="text-muted-foreground">No releases found</p>
                       <Button variant="outline" size="sm" onClick={() => navigate("/releases/new")} data-testid="button-create-first-release">
                         Create your first release
@@ -206,7 +191,7 @@ export default function ReleasesListPage() {
                 variant="outline"
                 size="sm"
                 disabled={page <= 1}
-                onClick={() => setPage(page - 1)}
+                onClick={() => dispatch(setPage(page - 1))}
                 data-testid="button-prev-page"
               >
                 <ChevronLeft className="w-4 h-4" />
@@ -218,7 +203,7 @@ export default function ReleasesListPage() {
                 variant="outline"
                 size="sm"
                 disabled={page >= data.totalPages}
-                onClick={() => setPage(page + 1)}
+                onClick={() => dispatch(setPage(page + 1))}
                 data-testid="button-next-page"
               >
                 <ChevronRight className="w-4 h-4" />
@@ -231,7 +216,7 @@ export default function ReleasesListPage() {
   );
 }
 
-function Rocket(props: any) {
+function RocketIcon(props: any) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
       <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/>

@@ -1,17 +1,17 @@
 import { Switch, Route } from "wouter";
-import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { Provider } from "react-redux";
+import { store } from "@/app/store";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import NotFound from "@/pages/not-found";
-import ReleasesListPage from "@/pages/releases-list";
-import ReleaseDetailPage from "@/pages/release-detail";
-import ReleaseFormPage from "@/pages/release-form";
-import HistoryFormPage from "@/pages/history-form";
-import TemplatesListPage from "@/pages/templates-list";
+import ReleasesListPage from "@/features/releases/ReleasesListPage";
+import ReleaseDetailPage from "@/features/releases/ReleaseDetailPage";
+import ReleaseFormPage from "@/features/releases/ReleaseFormPage";
+import HistoryFormPage from "@/features/releases/HistoryFormPage";
+import TemplatesPage from "@/features/templates/TemplatesPage";
 
 function Router() {
   return (
@@ -22,7 +22,7 @@ function Router() {
       <Route path="/releases/:id/history/new" component={HistoryFormPage} />
       <Route path="/releases/:id/history/:historyId/edit" component={HistoryFormPage} />
       <Route path="/releases/:id" component={ReleaseDetailPage} />
-      <Route path="/templates" component={TemplatesListPage} />
+      <Route path="/templates" component={TemplatesPage} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -35,7 +35,7 @@ function App() {
   };
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <Provider store={store}>
       <TooltipProvider>
         <SidebarProvider style={style as React.CSSProperties}>
           <div className="flex h-screen w-full">
@@ -53,7 +53,7 @@ function App() {
         </SidebarProvider>
         <Toaster />
       </TooltipProvider>
-    </QueryClientProvider>
+    </Provider>
   );
 }
 

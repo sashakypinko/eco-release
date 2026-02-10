@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation, useParams } from "wouter";
 import {
   ArrowLeft, Edit, Trash2, Plus, ExternalLink, Calendar, User, Server,
@@ -15,10 +14,11 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { StatusBadge, EnvironmentBadge } from "@/components/status-badge";
+import { StatusBadge, EnvironmentBadge } from "@/shared/StatusBadge";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient, apiRequest } from "@/lib/queryClient";
-import { format } from "date-fns";
+import { formatDate, formatDateTime } from "@/shared/utils";
+import { useGetReleaseByIdQuery, useDeleteReleaseMutation, useUpdateChecklistItemStateMutation } from "./api";
+import type { ReleaseHistory } from "@/shared/types";
 
 export default function ReleaseDetailPage() {
   const params = useParams<{ id: string }>();
@@ -26,39 +26,29 @@ export default function ReleaseDetailPage() {
   const { toast } = useToast();
   const [expandedHistory, setExpandedHistory] = useState<number | null>(null);
 
-  const { data: releaseData, isLoading } = useQuery<{ release: any }>({
-    queryKey: ["/api/releases", params.id],
-  });
-
+  const { data: releaseData, isLoading } = useGetReleaseByIdQuery(params.id!);
   const release = releaseData?.release;
 
-  const deleteMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("DELETE", `/api/releases/${params.id}`);
-      return res.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Release deleted" });
-      queryClient.invalidateQueries({ queryKey: ["/api/releases"] });
-      navigate("/");
-    },
-    onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
-    },
-  });
+  const [deleteRelease] = useDeleteReleaseMutation();
+  const [toggleChecklistItem] = useUpdateChecklistItemStateMutation();
 
-  const toggleChecklistMutation = useMutation({
-    mutationFn: async (data: { id: number; done: boolean }) => {
-      const res = await apiRequest("PUT", "/api/releases/update-checklist-item-state", data);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/releases", params.id] });
-    },
-    onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
-    },
-  });
+  const handleDelete = async () => {
+    try {
+      await deleteRelease(params.id!).unwrap();
+      toast({ title: "Release deleted" });
+      navigate("/");
+    } catch (err: any) {
+      toast({ title: "Error", description: err?.data?.message || "Failed to delete", variant: "destructive" });
+    }
+  };
+
+  const handleToggleChecklist = async (id: number, done: boolean) => {
+    try {
+      await toggleChecklistItem({ id, done }).unwrap();
+    } catch (err: any) {
+      toast({ title: "Error", description: err?.data?.message || "Failed to update", variant: "destructive" });
+    }
+  };
 
   if (isLoading) {
     return (
@@ -84,7 +74,7 @@ export default function ReleaseDetailPage() {
     );
   }
 
-  const checkedCount = release.checklistItems?.filter((i: any) => i.done).length || 0;
+  const checkedCount = release.checklistItems?.filter((i) => i.done).length || 0;
   const totalCount = release.checklistItems?.length || 0;
 
   return (
@@ -126,7 +116,7 @@ export default function ReleaseDetailPage() {
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={() => deleteMutation.mutate()} data-testid="button-confirm-delete">
+                <AlertDialogAction onClick={handleDelete} data-testid="button-confirm-delete">
                   Delete
                 </AlertDialogAction>
               </AlertDialogFooter>
@@ -144,13 +134,13 @@ export default function ReleaseDetailPage() {
             <CardContent>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <DetailField label="Version" value={release.version} icon={<FileText className="w-4 h-4" />} />
-                <DetailField label="Description" value={release.description || "—"} />
-                <DetailField label="Product" value={release.product?.name || "—"} />
-                <DetailField label="Work Order" value={release.workOrder?.title || "—"} />
-                <DetailField label="Customer Contact" value={release.customerContact || "—"} icon={<User className="w-4 h-4" />} />
+                <DetailField label="Description" value={release.description || "\u2014"} />
+                <DetailField label="Product" value={release.product?.name || "\u2014"} />
+                <DetailField label="Work Order" value={release.workOrder?.title || "\u2014"} />
+                <DetailField label="Customer Contact" value={release.customerContact || "\u2014"} icon={<User className="w-4 h-4" />} />
                 <DetailField
                   label="Planned Release Date"
-                  value={release.plannedReleaseDate ? format(new Date(release.plannedReleaseDate), "MMM d, yyyy") : "—"}
+                  value={formatDate(release.plannedReleaseDate) || "\u2014"}
                   icon={<Calendar className="w-4 h-4" />}
                 />
                 {release.projectJiraIssue && (
@@ -170,7 +160,7 @@ export default function ReleaseDetailPage() {
                 )}
                 <DetailField
                   label="Created By"
-                  value={release.user?.name || "—"}
+                  value={release.user?.name || "\u2014"}
                   icon={<User className="w-4 h-4" />}
                 />
               </div>
@@ -189,7 +179,7 @@ export default function ReleaseDetailPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-1">
-                  {release.checklistItems?.map((item: any) => (
+                  {release.checklistItems?.map((item) => (
                     <div
                       key={item.id}
                       className="flex items-center gap-3 py-2 px-3 rounded-md hover-elevate"
@@ -197,9 +187,7 @@ export default function ReleaseDetailPage() {
                     >
                       <Checkbox
                         checked={item.done}
-                        onCheckedChange={(checked) => {
-                          toggleChecklistMutation.mutate({ id: item.id, done: !!checked });
-                        }}
+                        onCheckedChange={(checked) => handleToggleChecklist(item.id, !!checked)}
                         data-testid={`checkbox-item-${item.id}`}
                       />
                       <span className={`text-sm flex-1 ${item.done ? "line-through text-muted-foreground" : ""}`}>
@@ -231,9 +219,9 @@ export default function ReleaseDetailPage() {
               </Button>
             </CardHeader>
             <CardContent>
-              {release.histories?.length > 0 ? (
+              {release.histories && release.histories.length > 0 ? (
                 <div className="space-y-3">
-                  {release.histories.map((history: any) => (
+                  {release.histories.map((history) => (
                     <HistoryCard
                       key={history.id}
                       history={history}
@@ -292,7 +280,7 @@ export default function ReleaseDetailPage() {
                   <Separator />
                   <div>
                     <span className="text-xs text-muted-foreground">Created</span>
-                    <p className="text-sm mt-0.5">{format(new Date(release.createdAt), "MMM d, yyyy h:mm a")}</p>
+                    <p className="text-sm mt-0.5">{formatDateTime(release.createdAt)}</p>
                   </div>
                 </>
               )}
@@ -339,9 +327,9 @@ function DetailField({ label, value, icon }: { label: string; value: string; ico
   );
 }
 
-function HistoryCard({ history, releaseId, expanded, onToggle }: { history: any; releaseId: number; expanded: boolean; onToggle: () => void }) {
+function HistoryCard({ history, releaseId, expanded, onToggle }: { history: ReleaseHistory; releaseId: number; expanded: boolean; onToggle: () => void }) {
   const [, navigate] = useLocation();
-  const checkedCount = history.checklistItems?.filter((i: any) => i.done).length || 0;
+  const checkedCount = history.checklistItems?.filter((i) => i.done).length || 0;
   const totalCount = history.checklistItems?.length || 0;
 
   return (
@@ -351,7 +339,7 @@ function HistoryCard({ history, releaseId, expanded, onToggle }: { history: any;
           <StatusBadge status={history.status} />
           <EnvironmentBadge env={history.environment} />
           <span className="text-xs text-muted-foreground">
-            {history.createdAt ? format(new Date(history.createdAt), "MMM d, yyyy h:mm a") : ""}
+            {formatDateTime(history.createdAt)}
           </span>
           {totalCount > 0 && (
             <Badge variant="secondary" className="no-default-hover-elevate no-default-active-elevate text-xs">
@@ -374,12 +362,12 @@ function HistoryCard({ history, releaseId, expanded, onToggle }: { history: any;
       {expanded && (
         <div className="px-4 pb-4 border-t pt-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-            <DetailField label="Release Manager" value={history.releaseManager?.name || "—"} icon={<User className="w-3 h-3" />} />
-            <DetailField label="Approved By" value={history.approvedByUser?.name || "—"} />
-            {history.dateOfApproval && <DetailField label="Approval Date" value={format(new Date(history.dateOfApproval), "MMM d, yyyy")} />}
+            <DetailField label="Release Manager" value={history.releaseManager?.name || "\u2014"} icon={<User className="w-3 h-3" />} />
+            <DetailField label="Approved By" value={history.approvedByUser?.name || "\u2014"} />
+            {history.dateOfApproval && <DetailField label="Approval Date" value={formatDate(history.dateOfApproval)} />}
             {history.server && <DetailField label="Server" value={history.server} icon={<Server className="w-3 h-3" />} />}
             {history.port && <DetailField label="Port" value={String(history.port)} />}
-            {history.releaseDate && <DetailField label="Release Date" value={format(new Date(history.releaseDate), "MMM d, yyyy h:mm a")} />}
+            {history.releaseDate && <DetailField label="Release Date" value={formatDateTime(history.releaseDate)} />}
             {history.smokeTestResult && (
               <div>
                 <span className="text-xs text-muted-foreground">Smoke Test</span>
@@ -409,7 +397,7 @@ function HistoryCard({ history, releaseId, expanded, onToggle }: { history: any;
             <div className="mt-4">
               <span className="text-xs text-muted-foreground">Checklist Items</span>
               <div className="mt-1 space-y-1">
-                {history.checklistItems.map((item: any) => (
+                {history.checklistItems!.map((item) => (
                   <div key={item.id} className="flex items-center gap-2 text-sm">
                     {item.done ? (
                       <CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />

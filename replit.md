@@ -5,11 +5,42 @@ A full-stack Release Management System that connects to an external MySQL databa
 
 ## Architecture
 - **Backend**: NestJS with Drizzle ORM (MySQL dialect) connecting to external MySQL database
-- **Frontend**: React with Vite, TanStack React Query, wouter routing, shadcn/ui components
+- **Frontend**: React with Vite, Redux Toolkit (RTK Query), wouter routing, shadcn/ui components, feature-based architecture
 - **Database**: External MySQL (credentials via env secrets: MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, MYSQL_PORT)
 - **Build**: NestJS compiles to CommonJS (server/dist/), shared schema loaded via runtime require() to avoid Drizzle ESM/CJS type conflicts
 
-## Key Files
+## Frontend Architecture (Feature-Based with Redux Toolkit)
+
+### App Layer (`client/src/app/`)
+- `store.ts` - Redux store configuration with RTK Query middleware
+- `hooks.ts` - Typed useAppDispatch and useAppSelector hooks
+- `baseQuery.ts` - RTK Query fetchBaseQuery configured for /api base URL
+
+### Shared Layer (`client/src/shared/`)
+- `types.ts` - Domain types (Release, ReleaseHistory, ChecklistItem, ChecklistTemplate, Product, User, WorkOrder, form value types)
+- `constants.ts` - Status/environment options, badge variant mappings
+- `utils.ts` - Date formatting utilities (formatDate, formatDateTime, toDateInputValue, toDateTimeInputValue)
+- `StatusBadge.tsx` - Reusable StatusBadge and EnvironmentBadge components
+
+### Features Layer (`client/src/features/`)
+
+#### Releases Feature (`features/releases/`)
+- `api.ts` - RTK Query API: getReleases, getReleaseById, createRelease, updateRelease, deleteRelease, createHistory, updateHistory, updateChecklistItemState
+- `slice.ts` - Redux slice for filter/pagination state (search, statusFilter, productFilter, page)
+- `ReleasesListPage.tsx` - Releases list with filters, pagination, table
+- `ReleaseDetailPage.tsx` - Release detail with checklist toggling, history cards
+- `ReleaseFormPage.tsx` - Create/edit release form
+- `HistoryFormPage.tsx` - Create/edit release history form
+
+#### Templates Feature (`features/templates/`)
+- `api.ts` - RTK Query API: getTemplates, createTemplate, updateTemplate, deleteTemplate
+- `slice.ts` - Redux slice for template editing state (editingTemplateId, editItems, createDialog)
+- `TemplatesPage.tsx` - Checklist templates management with inline editing
+
+#### Reference Data Feature (`features/reference-data/`)
+- `api.ts` - RTK Query API: getProducts, getUsers, getWorkOrders
+
+## Key Files (Backend)
 - `shared/schema.ts` - Drizzle MySQL table definitions and Zod schemas
 - `server/src/main.ts` - NestJS bootstrap with Vite dev server integration
 - `server/src/app.module.ts` - Root NestJS module importing all feature modules
@@ -24,12 +55,12 @@ A full-stack Release Management System that connects to an external MySQL databa
 - `server/src/reference-data/reference-data.controller.ts` - Products, users, work orders controller
 - `server/src/spa-fallback.filter.ts` - NestJS exception filter for SPA routing
 - `server/index.ts` - Entry point that builds and runs NestJS
-- `client/src/App.tsx` - Main app with sidebar layout and routing
-- `client/src/pages/releases-list.tsx` - Releases list with filters/pagination
-- `client/src/pages/release-detail.tsx` - Release detail with checklist toggling
-- `client/src/pages/release-form.tsx` - Create/edit release form
-- `client/src/pages/history-form.tsx` - Create/edit release history form
-- `client/src/pages/templates-list.tsx` - Checklist templates management
+
+## Key Files (Frontend)
+- `client/src/App.tsx` - Main app with Redux Provider, sidebar layout, wouter routing
+- `client/src/app/store.ts` - Redux store with RTK Query APIs and feature slices
+- `client/src/components/app-sidebar.tsx` - Navigation sidebar (Releases, Templates)
+- `client/src/components/theme-toggle.tsx` - Dark/light mode toggle
 
 ## NestJS Module Structure
 - `AppModule` - Root module, imports all feature modules
@@ -62,7 +93,11 @@ releases, release_histories, release_checklist_items, release_checklist_template
 - Schema loaded at runtime via `require('../../../shared/schema')` in service files
 - Vite dev server integrated via `SpaFallbackFilter` NestJS exception filter for SPA routing
 - `server/nest-cli.json` configures NestJS CLI with `deleteOutDir: true`
+- RTK Query uses fetchBaseQuery (not axios) to keep dependencies minimal
+- RTK Query automatic tag-based cache invalidation replaces manual queryClient.invalidateQueries
 
 ## Recent Changes
+- 2026-02-10: Migrated frontend to Redux Toolkit (RTK Query) with feature-based architecture
+- 2026-02-10: Removed TanStack React Query, old Express server files (db.ts, routes.ts, static.ts, storage.ts, vite.ts), and old page files
 - 2026-02-10: Migrated backend from Express.js to NestJS with modular architecture
 - 2026-02-10: Initial implementation - full CRUD for releases, histories, templates, checklist items with MySQL connectivity

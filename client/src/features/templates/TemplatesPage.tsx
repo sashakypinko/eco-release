@@ -1,13 +1,9 @@
-import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { useLocation } from "wouter";
 import { Plus, ListChecks, Trash2, Edit, GripVertical, X, Save, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Separator } from "@/components/ui/separator";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
 } from "@/components/ui/dialog";
@@ -16,82 +12,72 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useAppDispatch, useAppSelector } from "@/app/hooks";
+import {
+  setCreateDialogOpen, setNewName, startEditing, stopEditing,
+  setEditName, addEditItem, removeEditItem, updateEditItemText, resetCreateDialog,
+} from "./slice";
+import {
+  useGetTemplatesQuery, useCreateTemplateMutation,
+  useUpdateTemplateMutation, useDeleteTemplateMutation,
+} from "./api";
 
-export default function TemplatesListPage() {
+export default function TemplatesPage() {
   const { toast } = useToast();
-  const [createOpen, setCreateOpen] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [editingTemplate, setEditingTemplate] = useState<any>(null);
-  const [editItems, setEditItems] = useState<{ text: string; order: number }[]>([]);
-  const [editName, setEditName] = useState("");
+  const dispatch = useAppDispatch();
+  const { editingTemplateId, editName, editItems, createDialogOpen, newName } = useAppSelector((s) => s.templates);
 
-  const { data: templates, isLoading } = useQuery<any[]>({ queryKey: ["/api/checklist-templates"] });
+  const { data: templates, isLoading } = useGetTemplatesQuery();
+  const [createTemplate, { isLoading: isCreating }] = useCreateTemplateMutation();
+  const [deleteTemplate] = useDeleteTemplateMutation();
+  const [updateTemplate, { isLoading: isUpdatingItems }] = useUpdateTemplateMutation();
 
-  const createMutation = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/checklist-templates", { name: newName }),
-    onSuccess: () => {
+  const handleCreate = async () => {
+    try {
+      await createTemplate({ name: newName }).unwrap();
       toast({ title: "Template created" });
-      queryClient.invalidateQueries({ queryKey: ["/api/checklist-templates"] });
-      setCreateOpen(false);
-      setNewName("");
-    },
-    onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
-  });
+      dispatch(resetCreateDialog());
+    } catch (err: any) {
+      toast({ title: "Error", description: err?.data?.message || "Failed to create", variant: "destructive" });
+    }
+  };
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiRequest("DELETE", `/api/checklist-templates/${id}`),
-    onSuccess: () => {
+  const handleDelete = async (id: number) => {
+    try {
+      await deleteTemplate(id).unwrap();
       toast({ title: "Template deleted" });
-      queryClient.invalidateQueries({ queryKey: ["/api/checklist-templates"] });
-    },
-    onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
-  });
+    } catch (err: any) {
+      toast({ title: "Error", description: err?.data?.message || "Failed to delete", variant: "destructive" });
+    }
+  };
 
-  const updateNameMutation = useMutation({
-    mutationFn: ({ id, name }: { id: number; name: string }) =>
-      apiRequest("PUT", `/api/checklist-templates/${id}`, { name }),
-    onSuccess: () => {
+  const handleUpdateName = async (id: number, name: string) => {
+    try {
+      await updateTemplate({ id, name }).unwrap();
       toast({ title: "Template name updated" });
-      queryClient.invalidateQueries({ queryKey: ["/api/checklist-templates"] });
-    },
-    onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
-  });
-
-  const updateItemsMutation = useMutation({
-    mutationFn: ({ id, items }: { id: number; items: { text: string; order: number }[] }) =>
-      apiRequest("PUT", `/api/checklist-templates/${id}`, { items }),
-    onSuccess: () => {
-      toast({ title: "Template items updated" });
-      queryClient.invalidateQueries({ queryKey: ["/api/checklist-templates"] });
-      setEditingTemplate(null);
-    },
-    onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
-  });
-
-  const startEditing = (template: any) => {
-    setEditingTemplate(template);
-    setEditName(template.name);
-    setEditItems(template.items?.map((i: any) => ({ text: i.text, order: i.order })) || []);
+    } catch (err: any) {
+      toast({ title: "Error", description: err?.data?.message || "Failed to update", variant: "destructive" });
+    }
   };
 
-  const addItem = () => {
-    setEditItems([...editItems, { text: "", order: editItems.length + 1 }]);
-  };
-
-  const removeItem = (index: number) => {
-    const next = editItems.filter((_, i) => i !== index).map((item, i) => ({ ...item, order: i + 1 }));
-    setEditItems(next);
-  };
-
-  const updateItemText = (index: number, text: string) => {
-    setEditItems(editItems.map((item, i) => i === index ? { ...item, text } : item));
-  };
-
-  const saveItems = () => {
-    if (!editingTemplate) return;
+  const handleSaveItems = async () => {
+    if (!editingTemplateId) return;
     const valid = editItems.filter((i) => i.text.trim());
-    updateItemsMutation.mutate({ id: editingTemplate.id, items: valid });
+    try {
+      await updateTemplate({ id: editingTemplateId, items: valid }).unwrap();
+      toast({ title: "Template items updated" });
+      dispatch(stopEditing());
+    } catch (err: any) {
+      toast({ title: "Error", description: err?.data?.message || "Failed to update", variant: "destructive" });
+    }
+  };
+
+  const handleStartEditing = (template: any) => {
+    dispatch(startEditing({
+      id: template.id,
+      name: template.name,
+      items: template.items?.map((i: any) => ({ text: i.text, order: i.order })) || [],
+    }));
   };
 
   return (
@@ -101,7 +87,7 @@ export default function TemplatesListPage() {
           <h1 className="text-2xl font-semibold" data-testid="text-page-title">Checklist Templates</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage reusable checklist templates for releases</p>
         </div>
-        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <Dialog open={createDialogOpen} onOpenChange={(open) => dispatch(setCreateDialogOpen(open))}>
           <DialogTrigger asChild>
             <Button data-testid="button-create-template">
               <Plus className="w-4 h-4 mr-2" />
@@ -115,17 +101,17 @@ export default function TemplatesListPage() {
             <Input
               placeholder="Template name"
               value={newName}
-              onChange={(e) => setNewName(e.target.value)}
+              onChange={(e) => dispatch(setNewName(e.target.value))}
               data-testid="input-template-name"
             />
             <DialogFooter>
-              <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
+              <Button variant="outline" onClick={() => dispatch(setCreateDialogOpen(false))}>Cancel</Button>
               <Button
-                onClick={() => createMutation.mutate()}
-                disabled={!newName.trim() || createMutation.isPending}
+                onClick={handleCreate}
+                disabled={!newName.trim() || isCreating}
                 data-testid="button-save-template"
               >
-                {createMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                {isCreating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
                 Create
               </Button>
             </DialogFooter>
@@ -139,19 +125,19 @@ export default function TemplatesListPage() {
         </div>
       ) : templates && templates.length > 0 ? (
         <div className="space-y-4">
-          {templates.map((template: any) => (
+          {templates.map((template) => (
             <Card key={template.id} data-testid={`card-template-${template.id}`}>
               <CardHeader className="flex flex-row items-center justify-between gap-4 pb-3">
                 <div className="flex items-center gap-3 flex-wrap">
                   <ListChecks className="w-5 h-5 text-primary" />
-                  {editingTemplate?.id === template.id ? (
+                  {editingTemplateId === template.id ? (
                     <Input
                       value={editName}
-                      onChange={(e) => setEditName(e.target.value)}
+                      onChange={(e) => dispatch(setEditName(e.target.value))}
                       className="w-64"
                       onBlur={() => {
                         if (editName !== template.name && editName.trim()) {
-                          updateNameMutation.mutate({ id: template.id, name: editName });
+                          handleUpdateName(template.id, editName);
                         }
                       }}
                       data-testid="input-edit-template-name"
@@ -164,20 +150,20 @@ export default function TemplatesListPage() {
                   </Badge>
                 </div>
                 <div className="flex items-center gap-2">
-                  {editingTemplate?.id === template.id ? (
+                  {editingTemplateId === template.id ? (
                     <>
-                      <Button size="sm" variant="outline" onClick={() => setEditingTemplate(null)} data-testid="button-cancel-edit">
+                      <Button size="sm" variant="outline" onClick={() => dispatch(stopEditing())} data-testid="button-cancel-edit">
                         <X className="w-3 h-3 mr-1" />
                         Cancel
                       </Button>
-                      <Button size="sm" onClick={saveItems} disabled={updateItemsMutation.isPending} data-testid="button-save-items">
-                        {updateItemsMutation.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Save className="w-3 h-3 mr-1" />}
+                      <Button size="sm" onClick={handleSaveItems} disabled={isUpdatingItems} data-testid="button-save-items">
+                        {isUpdatingItems ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Save className="w-3 h-3 mr-1" />}
                         Save
                       </Button>
                     </>
                   ) : (
                     <>
-                      <Button size="sm" variant="outline" onClick={() => startEditing(template)} data-testid={`button-edit-template-${template.id}`}>
+                      <Button size="sm" variant="outline" onClick={() => handleStartEditing(template)} data-testid={`button-edit-template-${template.id}`}>
                         <Edit className="w-3 h-3 mr-1" />
                         Edit
                       </Button>
@@ -196,7 +182,7 @@ export default function TemplatesListPage() {
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => deleteMutation.mutate(template.id)}>Delete</AlertDialogAction>
+                            <AlertDialogAction onClick={() => handleDelete(template.id)}>Delete</AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
@@ -205,7 +191,7 @@ export default function TemplatesListPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                {editingTemplate?.id === template.id ? (
+                {editingTemplateId === template.id ? (
                   <div className="space-y-2">
                     {editItems.map((item, index) => (
                       <div key={index} className="flex items-center gap-2">
@@ -213,24 +199,24 @@ export default function TemplatesListPage() {
                         <span className="text-sm text-muted-foreground w-6">{index + 1}.</span>
                         <Input
                           value={item.text}
-                          onChange={(e) => updateItemText(index, e.target.value)}
+                          onChange={(e) => dispatch(updateEditItemText({ index, text: e.target.value }))}
                           placeholder="Checklist item text"
                           className="flex-1"
                           data-testid={`input-item-${index}`}
                         />
-                        <Button size="icon" variant="ghost" onClick={() => removeItem(index)} data-testid={`button-remove-item-${index}`}>
+                        <Button size="icon" variant="ghost" onClick={() => dispatch(removeEditItem(index))} data-testid={`button-remove-item-${index}`}>
                           <X className="w-4 h-4" />
                         </Button>
                       </div>
                     ))}
-                    <Button size="sm" variant="outline" onClick={addItem} className="mt-2" data-testid="button-add-item">
+                    <Button size="sm" variant="outline" onClick={() => dispatch(addEditItem())} className="mt-2" data-testid="button-add-item">
                       <Plus className="w-3 h-3 mr-1" />
                       Add Item
                     </Button>
                   </div>
                 ) : template.items && template.items.length > 0 ? (
                   <div className="space-y-1.5">
-                    {template.items.map((item: any) => (
+                    {template.items.map((item) => (
                       <div key={item.id} className="flex items-center gap-2 text-sm">
                         <span className="text-muted-foreground w-6 text-right">{item.order}.</span>
                         <span>{item.text}</span>

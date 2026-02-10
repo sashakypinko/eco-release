@@ -212,40 +212,6 @@ export default function ReleaseDetailPage() {
             </Card>
           )}
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between gap-4 pb-3">
-              <h3 className="font-semibold">Release History</h3>
-              {hasPermission("history:create") && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => navigate(`/releases/${release.id}/history/new`)}
-                  data-testid="button-add-history"
-                >
-                  <Plus className="w-4 h-4 mr-1" />
-                  Add Entry
-                </Button>
-              )}
-            </CardHeader>
-            <CardContent>
-              {release.histories && release.histories.length > 0 ? (
-                <div className="space-y-3">
-                  {release.histories.map((history) => (
-                    <HistoryCard
-                      key={history.id}
-                      history={history}
-                      releaseId={release.id}
-                      expanded={expandedHistory === history.id}
-                      onToggle={() => setExpandedHistory(expandedHistory === history.id ? null : history.id)}
-                      canEdit={hasPermission("history:edit")}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground text-center py-6">No history records</p>
-              )}
-            </CardContent>
-          </Card>
         </div>
 
         <div className="space-y-6">
@@ -303,6 +269,41 @@ export default function ReleaseDetailPage() {
       {release.latestHistory?.releaseVideo && (
         <ReleaseVideoCard videoUrl={release.latestHistory.releaseVideo} />
       )}
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-4 pb-3">
+          <h3 className="font-semibold">Release History</h3>
+          {hasPermission("history:create") && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => navigate(`/releases/${release.id}/history/new`)}
+              data-testid="button-add-history"
+            >
+              <Plus className="w-4 h-4 mr-1" />
+              Add Entry
+            </Button>
+          )}
+        </CardHeader>
+        <CardContent>
+          {release.histories && release.histories.length > 0 ? (
+            <div className="space-y-3">
+              {release.histories.map((history) => (
+                <HistoryCard
+                  key={history.id}
+                  history={history}
+                  releaseId={release.id}
+                  expanded={expandedHistory === history.id}
+                  onToggle={() => setExpandedHistory(expandedHistory === history.id ? null : history.id)}
+                  canEdit={hasPermission("history:edit")}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-6">No history records</p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

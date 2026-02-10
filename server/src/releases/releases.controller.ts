@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Query, ParseIntPipe, HttpCode, HttpStatus, NotFoundException, BadRequestException } from '@nestjs/common';
 import { ReleasesService } from './releases.service';
+import { RequirePermission } from '../guards/permission.guard';
 
 const schema = require('../../../shared/schema');
 
@@ -8,6 +9,7 @@ export class ReleasesController {
   constructor(private readonly releasesService: ReleasesService) {}
 
   @Get()
+  @RequirePermission('release:view')
   async findAll(
     @Query('product_id') productId?: string,
     @Query('user_id') userId?: string,
@@ -32,6 +34,7 @@ export class ReleasesController {
   }
 
   @Get(':id')
+  @RequirePermission('release:view')
   async findOne(@Param('id', ParseIntPipe) id: number) {
     const release = await this.releasesService.getReleaseById(id);
     if (!release) throw new NotFoundException('Release not found');
@@ -40,6 +43,7 @@ export class ReleasesController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @RequirePermission('release:create')
   async create(@Body() body: any) {
     const parsed = schema.insertReleaseSchema.safeParse(body);
     if (!parsed.success) {
@@ -50,6 +54,7 @@ export class ReleasesController {
   }
 
   @Put(':id')
+  @RequirePermission('release:edit')
   async update(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
     const parsed = schema.insertReleaseSchema.partial().safeParse(body);
     if (!parsed.success) {
@@ -61,6 +66,7 @@ export class ReleasesController {
   }
 
   @Delete(':id')
+  @RequirePermission('release:delete')
   async remove(@Param('id', ParseIntPipe) id: number) {
     await this.releasesService.deleteRelease(id);
     return { message: 'Release deleted' };

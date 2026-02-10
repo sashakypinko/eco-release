@@ -1,0 +1,20 @@
+{
+  "name": "releaseManager",
+  "version": "1.0.0",
+  "routing": {
+    "type": "browser",
+    "basePath": "/"
+  },
+  "navigation": [
+    {
+      "name": "Releases",
+      "path": "/",
+      "icon": "Rocket"
+    },
+    {
+      "name": "Checklist Templates",
+      "path": "/templates",
+      "icon": "ClipboardList"
+    }
+  ]
+}

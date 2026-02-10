@@ -1,60 +1,39 @@
-import { Switch, Route } from "wouter";
-import { Provider } from "react-redux";
-import { store } from "@/app/store";
-import { Toaster } from "@/components/ui/toaster";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/app-sidebar";
-import { ThemeToggle } from "@/components/theme-toggle";
-import NotFound from "@/pages/not-found";
-import ReleasesListPage from "@/features/releases/ReleasesListPage";
-import ReleaseDetailPage from "@/features/releases/ReleaseDetailPage";
-import ReleaseFormPage from "@/features/releases/ReleaseFormPage";
-import HistoryFormPage from "@/features/releases/HistoryFormPage";
-import TemplatesPage from "@/features/templates/TemplatesPage";
+import { createRoot, Root } from "react-dom/client";
+import type { RemoteApp, RemoteAppProps } from "./types/contracts";
+import { ApiProvider } from "./providers/ApiProvider";
+import { AuthProvider } from "./providers/AuthProvider";
+import { AppContent } from "./AppContent";
+import "./index.css";
 
-function Router() {
-  return (
-    <Switch>
-      <Route path="/" component={ReleasesListPage} />
-      <Route path="/releases/new" component={ReleaseFormPage} />
-      <Route path="/releases/:id/edit" component={ReleaseFormPage} />
-      <Route path="/releases/:id/history/new" component={HistoryFormPage} />
-      <Route path="/releases/:id/history/:historyId/edit" component={HistoryFormPage} />
-      <Route path="/releases/:id" component={ReleaseDetailPage} />
-      <Route path="/templates" component={TemplatesPage} />
-      <Route component={NotFound} />
-    </Switch>
-  );
-}
+let root: Root | null = null;
 
-function App() {
-  const style = {
-    "--sidebar-width": "16rem",
-    "--sidebar-width-icon": "3rem",
-  };
+const App: RemoteApp = {
+  mount: (container: HTMLElement, props: RemoteAppProps) => {
+    const auth = props?.auth || {
+      userId: "",
+      user: null,
+      permissions: [],
+      isAuthenticated: false,
+    };
+    const navigate = props?.navigate || ((path: string) => console.warn("Navigate not provided:", path));
+    const apiBaseUrl = props?.apiBaseUrl || "/api";
 
-  return (
-    <Provider store={store}>
-      <TooltipProvider>
-        <SidebarProvider style={style as React.CSSProperties}>
-          <div className="flex h-screen w-full">
-            <AppSidebar />
-            <div className="flex flex-col flex-1 min-w-0">
-              <header className="flex items-center justify-between gap-4 p-2 border-b sticky top-0 z-50 bg-background">
-                <SidebarTrigger data-testid="button-sidebar-toggle" />
-                <ThemeToggle />
-              </header>
-              <main className="flex-1 overflow-auto">
-                <Router />
-              </main>
-            </div>
-          </div>
-        </SidebarProvider>
-        <Toaster />
-      </TooltipProvider>
-    </Provider>
-  );
-}
+    root = createRoot(container);
+    root.render(
+      <ApiProvider baseUrl={apiBaseUrl} token={auth.token} permissions={auth.permissions}>
+        <AuthProvider auth={auth} navigate={navigate}>
+          <AppContent />
+        </AuthProvider>
+      </ApiProvider>
+    );
+  },
+
+  unmount: (_container: HTMLElement) => {
+    if (root) {
+      root.unmount();
+      root = null;
+    }
+  },
+};
 
 export default App;

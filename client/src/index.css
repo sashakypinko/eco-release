@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* LIGHT MODE */
-.eco-release-manager {
+:root {
   --button-outline: rgba(0,0,0, .10);
   --badge-outline: rgba(0,0,0, .05);
   --opaque-button-border-intensity: -8;
@@ -87,7 +87,7 @@
   --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 }
 
-.eco-release-manager.dark {
+.dark {
   --button-outline: rgba(255,255,255, .10);
   --badge-outline: rgba(255,255,255, .05);
   --opaque-button-border-intensity: 9;
@@ -166,13 +166,11 @@
 }
 
 @layer base {
-  .eco-release-manager *,
-  .eco-release-manager *::before,
-  .eco-release-manager *::after {
+  * {
     @apply border-border;
   }
 
-  .eco-release-manager {
+  body {
     @apply font-sans antialiased bg-background text-foreground;
   }
 }

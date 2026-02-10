@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
 import {
   ArrowLeft, Edit, Trash2, Plus, ExternalLink, Calendar, User, Server,
@@ -297,31 +297,66 @@ export default function ReleaseDetailPage() {
             </CardContent>
           </Card>
 
-          {release.latestHistory?.releaseVideo && (
-            <Card>
-              <CardHeader className="pb-3">
-                <h3 className="font-semibold text-sm flex items-center gap-2">
-                  <Video className="w-4 h-4" />
-                  Release Video
-                </h3>
-              </CardHeader>
-              <CardContent>
-                <a
-                  href={release.latestHistory.releaseVideo}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-primary hover:underline inline-flex items-center gap-1"
-                  data-testid="link-release-video"
-                >
-                  <ExternalLink className="w-3 h-3" />
-                  Watch video
-                </a>
-              </CardContent>
-            </Card>
-          )}
         </div>
       </div>
+
+      {release.latestHistory?.releaseVideo && (
+        <ReleaseVideoCard videoUrl={release.latestHistory.releaseVideo} />
+      )}
     </div>
+  );
+}
+
+function ReleaseVideoCard({ videoUrl }: { videoUrl: string }) {
+  const [theme, setTheme] = useState<"dark" | "light">(() =>
+    document.documentElement.classList.contains("dark") ? "dark" : "light"
+  );
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setTheme(document.documentElement.classList.contains("dark") ? "dark" : "light");
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
+
+  const videoIdMatch = videoUrl.match(/(\d+)\s*$/);
+  const videoId = videoIdMatch ? videoIdMatch[1] : null;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <h3 className="font-semibold flex items-center gap-2">
+          <Video className="w-4 h-4" />
+          Release Video
+        </h3>
+      </CardHeader>
+      <CardContent>
+        {videoId ? (
+          <div className="w-full" data-testid="release-video-embed">
+            <iframe
+              src={`https://video-widgets.tetheree.com/#/video?widgetId=NjIy&videoId=${videoId}&theme=${theme}`}
+              className="w-full rounded-md border"
+              style={{ aspectRatio: "16/9", minHeight: "280px" }}
+              allow="autoplay; fullscreen"
+              allowFullScreen
+              title="Release Video"
+            />
+          </div>
+        ) : (
+          <a
+            href={videoUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-primary hover:underline inline-flex items-center gap-1"
+            data-testid="link-release-video"
+          >
+            <ExternalLink className="w-3 h-3" />
+            Watch video
+          </a>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

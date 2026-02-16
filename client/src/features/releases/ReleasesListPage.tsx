@@ -11,17 +11,18 @@ import { StatusBadge, EnvironmentBadge } from "@/shared/StatusBadge";
 import { STATUS_OPTIONS } from "@/shared/constants";
 import { formatDate } from "@/shared/utils";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
-import { setSearch, setStatusFilter, setProductFilter, setPage, clearFilters } from "./slice";
+import { setSearch, setStatusFilter, setProductFilter, setUserFilter, setDateFrom, setDateTo, setPage, clearFilters } from "./slice";
 import { useGetReleasesQuery } from "./api";
-import { useGetProductsQuery } from "@/features/reference-data/api";
+import { useGetProductsQuery, useGetUsersQuery } from "@/features/reference-data/api";
 
 export default function ReleasesListPage() {
   const [, navigate] = useLocation();
   const { hasPermission } = useAuth();
   const dispatch = useAppDispatch();
-  const { search, statusFilter, productFilter, page, pageSize } = useAppSelector((s) => s.releases);
+  const { search, statusFilter, productFilter, userFilter, dateFrom, dateTo, page, pageSize } = useAppSelector((s) => s.releases);
 
   const { data: productsData } = useGetProductsQuery();
+  const { data: usersData } = useGetUsersQuery();
 
   const queryParams = new URLSearchParams();
   queryParams.set("page", String(page));
@@ -29,10 +30,13 @@ export default function ReleasesListPage() {
   if (search) queryParams.set("search", search);
   if (statusFilter !== "all") queryParams.set("status", statusFilter);
   if (productFilter !== "all") queryParams.set("product_id", productFilter);
+  if (userFilter !== "all") queryParams.set("user_id", userFilter);
+  if (dateFrom) queryParams.set("date_from", dateFrom);
+  if (dateTo) queryParams.set("date_to", dateTo);
 
   const { data, isLoading } = useGetReleasesQuery(queryParams.toString());
 
-  const hasFilters = search || statusFilter !== "all" || productFilter !== "all";
+  const hasFilters = search || statusFilter !== "all" || productFilter !== "all" || userFilter !== "all" || dateFrom || dateTo;
 
   return (
     <div className="p-6 space-y-6 max-w-full">
@@ -83,6 +87,39 @@ export default function ReleasesListPage() {
               ))}
             </SelectContent>
           </Select>
+          <Select value={userFilter} onValueChange={(v) => dispatch(setUserFilter(v))}>
+            <SelectTrigger className="w-[200px]" data-testid="select-user-filter">
+              <SelectValue placeholder="Filter by user" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Users</SelectItem>
+              {usersData?.map((u) => (
+                <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center gap-3 flex-wrap mt-3">
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-muted-foreground whitespace-nowrap">From</label>
+            <Input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => dispatch(setDateFrom(e.target.value))}
+              className="w-[160px]"
+              data-testid="input-date-from"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-muted-foreground whitespace-nowrap">To</label>
+            <Input
+              type="date"
+              value={dateTo}
+              onChange={(e) => dispatch(setDateTo(e.target.value))}
+              className="w-[160px]"
+              data-testid="input-date-to"
+            />
+          </div>
           {hasFilters && (
             <Button variant="ghost" size="sm" onClick={() => dispatch(clearFilters())} data-testid="button-clear-filters">
               <X className="w-4 h-4 mr-1" />

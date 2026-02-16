@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Plus, Search, X, ExternalLink, Calendar as CalendarIcon, User, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Search, X, ExternalLink, Calendar as CalendarIcon, User, ChevronLeft, ChevronRight, LayoutList, Kanban } from "lucide-react";
 import { format } from "date-fns";
 import { useAuth } from "@/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
@@ -16,33 +16,40 @@ import { StatusBadge, EnvironmentBadge } from "@/shared/StatusBadge";
 import { STATUS_OPTIONS } from "@/shared/constants";
 import { formatDate } from "@/shared/utils";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
-import { setSearch, setStatusFilter, setProductFilter, setUserFilter, setDateFilter, setPage, clearFilters } from "./slice";
-import { useGetReleasesQuery } from "./api";
+import { setSearch, setStatusFilter, setProductFilter, setUserFilter, setDateFilter, setPage, setViewMode, clearFilters } from "./slice";
+import { useGetReleasesQuery, useGetReleasesBoardQuery } from "./api";
 import { useGetProductsQuery, useGetUsersQuery } from "@/features/reference-data/api";
 import ReleaseFormModal from "./ReleaseFormModal";
+import KanbanBoard from "./KanbanBoard";
 
 export default function ReleasesListPage() {
   const [, navigate] = useLocation();
   const { hasPermission } = useAuth();
   const dispatch = useAppDispatch();
-  const { search, statusFilter, productFilter, userFilter, dateFilter, page, pageSize } = useAppSelector((s) => s.releases);
+  const { search, statusFilter, productFilter, userFilter, dateFilter, page, pageSize, viewMode } = useAppSelector((s) => s.releases);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
 
   const { data: productsData } = useGetProductsQuery();
   const { data: usersData } = useGetUsersQuery();
 
-  const queryParams = new URLSearchParams();
-  queryParams.set("page", String(page));
-  queryParams.set("page_size", String(pageSize));
-  if (search) queryParams.set("search", search);
-  if (statusFilter !== "all") queryParams.set("status", statusFilter);
-  if (productFilter !== "all") queryParams.set("product_id", productFilter);
-  if (userFilter !== "all") queryParams.set("user_id", userFilter);
-  if (dateFilter) queryParams.set("date_from", dateFilter);
-  if (dateFilter) queryParams.set("date_to", dateFilter);
+  const tableParams = new URLSearchParams();
+  tableParams.set("page", String(page));
+  tableParams.set("page_size", String(pageSize));
+  if (search) tableParams.set("search", search);
+  if (statusFilter !== "all") tableParams.set("status", statusFilter);
+  if (productFilter !== "all") tableParams.set("product_id", productFilter);
+  if (userFilter !== "all") tableParams.set("user_id", userFilter);
+  if (dateFilter) tableParams.set("date_from", dateFilter);
+  if (dateFilter) tableParams.set("date_to", dateFilter);
 
-  const { data, isLoading } = useGetReleasesQuery(queryParams.toString());
+  const boardParams = new URLSearchParams();
+  if (search) boardParams.set("search", search);
+  if (productFilter !== "all") boardParams.set("product_id", productFilter);
+  if (userFilter !== "all") boardParams.set("user_id", userFilter);
+
+  const { data: tableData, isLoading: tableLoading } = useGetReleasesQuery(tableParams.toString(), { skip: viewMode !== "table" });
+  const { data: boardData, isLoading: boardLoading, error: boardError } = useGetReleasesBoardQuery(boardParams.toString(), { skip: viewMode !== "board" });
 
   const hasFilters = search || statusFilter !== "all" || productFilter !== "all" || userFilter !== "all" || dateFilter;
 
@@ -55,12 +62,36 @@ export default function ReleasesListPage() {
           <h1 className="text-2xl font-semibold" data-testid="text-page-title">Releases</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage your software releases and deployments</p>
         </div>
-        {hasPermission("release:create") && (
-          <Button onClick={() => setCreateModalOpen(true)} data-testid="button-create-release">
-            <Plus className="w-4 h-4 mr-2" />
-            New Release
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center border rounded-md overflow-hidden" data-testid="view-mode-toggle">
+            <Button
+              variant={viewMode === "table" ? "default" : "ghost"}
+              size="sm"
+              className="rounded-none"
+              onClick={() => dispatch(setViewMode("table"))}
+              data-testid="button-view-table"
+            >
+              <LayoutList className="w-4 h-4 mr-1" />
+              Table
+            </Button>
+            <Button
+              variant={viewMode === "board" ? "default" : "ghost"}
+              size="sm"
+              className="rounded-none"
+              onClick={() => dispatch(setViewMode("board"))}
+              data-testid="button-view-board"
+            >
+              <Kanban className="w-4 h-4 mr-1" />
+              Board
+            </Button>
+          </div>
+          {hasPermission("release:create") && (
+            <Button onClick={() => setCreateModalOpen(true)} data-testid="button-create-release">
+              <Plus className="w-4 h-4 mr-2" />
+              New Release
+            </Button>
+          )}
+        </div>
       </div>
 
       <Card className="p-4">
@@ -75,17 +106,19 @@ export default function ReleasesListPage() {
               data-testid="input-search"
             />
           </div>
-          <Select value={statusFilter} onValueChange={(v) => dispatch(setStatusFilter(v))}>
-            <SelectTrigger className="w-[200px]" data-testid="select-status-filter">
-              <SelectValue placeholder="Filter by status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              {STATUS_OPTIONS.map((s) => (
-                <SelectItem key={s} value={s}>{s}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {viewMode === "table" && (
+            <Select value={statusFilter} onValueChange={(v) => dispatch(setStatusFilter(v))}>
+              <SelectTrigger className="w-[200px]" data-testid="select-status-filter">
+                <SelectValue placeholder="Filter by status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                {STATUS_OPTIONS.map((s) => (
+                  <SelectItem key={s} value={s}>{s}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Select value={productFilter} onValueChange={(v) => dispatch(setProductFilter(v))}>
             <SelectTrigger className="w-[180px]" data-testid="select-product-filter">
               <SelectValue placeholder="Filter by product" />
@@ -108,39 +141,41 @@ export default function ReleasesListPage() {
               ))}
             </SelectContent>
           </Select>
-          <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  "w-[180px] justify-start text-left font-normal",
-                  !dateFilter && "text-muted-foreground"
-                )}
-                data-testid="button-date-filter"
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {selectedDate ? format(selectedDate, "MMM d, yyyy") : "Pick a date"}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="single"
-                selected={selectedDate}
-                onSelect={(day) => {
-                  if (day) {
-                    const yyyy = day.getFullYear();
-                    const mm = String(day.getMonth() + 1).padStart(2, "0");
-                    const dd = String(day.getDate()).padStart(2, "0");
-                    dispatch(setDateFilter(`${yyyy}-${mm}-${dd}`));
-                  } else {
-                    dispatch(setDateFilter(""));
-                  }
-                  setCalendarOpen(false);
-                }}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
+          {viewMode === "table" && (
+            <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-[180px] justify-start text-left font-normal",
+                    !dateFilter && "text-muted-foreground"
+                  )}
+                  data-testid="button-date-filter"
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {selectedDate ? format(selectedDate, "MMM d, yyyy") : "Pick a date"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={(day) => {
+                    if (day) {
+                      const yyyy = day.getFullYear();
+                      const mm = String(day.getMonth() + 1).padStart(2, "0");
+                      const dd = String(day.getDate()).padStart(2, "0");
+                      dispatch(setDateFilter(`${yyyy}-${mm}-${dd}`));
+                    } else {
+                      dispatch(setDateFilter(""));
+                    }
+                    setCalendarOpen(false);
+                  }}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+          )}
           {hasFilters && (
             <Button variant="ghost" size="sm" onClick={() => dispatch(clearFilters())} data-testid="button-clear-filters">
               <X className="w-4 h-4 mr-1" />
@@ -150,132 +185,140 @@ export default function ReleasesListPage() {
         </div>
       </Card>
 
-      <Card>
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[60px]">ID</TableHead>
-                <TableHead>Product</TableHead>
-                <TableHead>Version</TableHead>
-                <TableHead>Environment</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Jira Issue</TableHead>
-                <TableHead>Planned Date</TableHead>
-                <TableHead>User</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <TableRow key={i}>
-                    {Array.from({ length: 8 }).map((_, j) => (
-                      <TableCell key={j}><Skeleton className="h-5 w-full" /></TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              ) : data?.data && data.data.length > 0 ? (
-                data.data.map((release) => (
-                  <TableRow
-                    key={release.id}
-                    className="cursor-pointer hover-elevate"
-                    onClick={() => navigate(`/releases/${release.id}`)}
-                    data-testid={`row-release-${release.id}`}
-                  >
-                    <TableCell className="font-mono text-muted-foreground">{release.id}</TableCell>
-                    <TableCell className="font-medium">{release.product?.name || "\u2014"}</TableCell>
-                    <TableCell className="font-mono">{release.version}</TableCell>
-                    <TableCell><EnvironmentBadge env={release.environment} /></TableCell>
-                    <TableCell><StatusBadge status={release.latestStatus} /></TableCell>
-                    <TableCell>
-                      {release.projectJiraIssue ? (
-                        <a
-                          href={release.projectJiraIssue}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm text-primary hover:underline inline-flex items-center gap-1"
-                          onClick={(e) => e.stopPropagation()}
-                          data-testid={`link-jira-${release.id}`}
-                        >
-                          <ExternalLink className="w-3 h-3" />
-                          Jira
-                        </a>
-                      ) : (
-                        <span className="text-muted-foreground">{"\u2014"}</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {release.plannedReleaseDate ? (
-                        <span className="text-sm inline-flex items-center gap-1">
-                          <CalendarIcon className="w-3 h-3 text-muted-foreground" />
-                          {formatDate(release.plannedReleaseDate)}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">{"\u2014"}</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {release.user ? (
-                        <span className="text-sm inline-flex items-center gap-1">
-                          <User className="w-3 h-3 text-muted-foreground" />
-                          {release.user.name}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">{"\u2014"}</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
+      {viewMode === "board" ? (
+        <KanbanBoard
+          items={boardData || []}
+          isLoading={boardLoading}
+          error={boardError}
+        />
+      ) : (
+        <Card>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-12">
-                    <div className="flex flex-col items-center gap-2">
-                      <RocketIcon className="w-10 h-10 text-muted-foreground/50" />
-                      <p className="text-muted-foreground">No releases found</p>
-                      {hasPermission("release:create") && (
-                        <Button variant="outline" size="sm" onClick={() => setCreateModalOpen(true)} data-testid="button-create-first-release">
-                          Create your first release
-                        </Button>
-                      )}
-                    </div>
-                  </TableCell>
+                  <TableHead className="w-[60px]">ID</TableHead>
+                  <TableHead>Product</TableHead>
+                  <TableHead>Version</TableHead>
+                  <TableHead>Environment</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Jira Issue</TableHead>
+                  <TableHead>Planned Date</TableHead>
+                  <TableHead>User</TableHead>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-
-        {data && data.totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t">
-            <p className="text-sm text-muted-foreground">
-              Showing {(data.page - 1) * data.pageSize + 1} to {Math.min(data.page * data.pageSize, data.total)} of {data.total}
-            </p>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => dispatch(setPage(page - 1))}
-                data-testid="button-prev-page"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </Button>
-              <span className="text-sm text-muted-foreground">
-                Page {data.page} of {data.totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page >= data.totalPages}
-                onClick={() => dispatch(setPage(page + 1))}
-                data-testid="button-next-page"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </Button>
-            </div>
+              </TableHeader>
+              <TableBody>
+                {tableLoading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <TableRow key={i}>
+                      {Array.from({ length: 8 }).map((_, j) => (
+                        <TableCell key={j}><Skeleton className="h-5 w-full" /></TableCell>
+                      ))}
+                    </TableRow>
+                  ))
+                ) : tableData?.data && tableData.data.length > 0 ? (
+                  tableData.data.map((release) => (
+                    <TableRow
+                      key={release.id}
+                      className="cursor-pointer hover-elevate"
+                      onClick={() => navigate(`/releases/${release.id}`)}
+                      data-testid={`row-release-${release.id}`}
+                    >
+                      <TableCell className="font-mono text-muted-foreground">{release.id}</TableCell>
+                      <TableCell className="font-medium">{release.product?.name || "\u2014"}</TableCell>
+                      <TableCell className="font-mono">{release.version}</TableCell>
+                      <TableCell><EnvironmentBadge env={release.environment} /></TableCell>
+                      <TableCell><StatusBadge status={release.latestStatus} /></TableCell>
+                      <TableCell>
+                        {release.projectJiraIssue ? (
+                          <a
+                            href={release.projectJiraIssue}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-primary hover:underline inline-flex items-center gap-1"
+                            onClick={(e) => e.stopPropagation()}
+                            data-testid={`link-jira-${release.id}`}
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            Jira
+                          </a>
+                        ) : (
+                          <span className="text-muted-foreground">{"\u2014"}</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {release.plannedReleaseDate ? (
+                          <span className="text-sm inline-flex items-center gap-1">
+                            <CalendarIcon className="w-3 h-3 text-muted-foreground" />
+                            {formatDate(release.plannedReleaseDate)}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">{"\u2014"}</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {release.user ? (
+                          <span className="text-sm inline-flex items-center gap-1">
+                            <User className="w-3 h-3 text-muted-foreground" />
+                            {release.user.name}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">{"\u2014"}</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-12">
+                      <div className="flex flex-col items-center gap-2">
+                        <RocketIcon className="w-10 h-10 text-muted-foreground/50" />
+                        <p className="text-muted-foreground">No releases found</p>
+                        {hasPermission("release:create") && (
+                          <Button variant="outline" size="sm" onClick={() => setCreateModalOpen(true)} data-testid="button-create-first-release">
+                            Create your first release
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
           </div>
-        )}
-      </Card>
+
+          {tableData && tableData.totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t">
+              <p className="text-sm text-muted-foreground">
+                Showing {(tableData.page - 1) * tableData.pageSize + 1} to {Math.min(tableData.page * tableData.pageSize, tableData.total)} of {tableData.total}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => dispatch(setPage(page - 1))}
+                  data-testid="button-prev-page"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  Page {tableData.page} of {tableData.totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= tableData.totalPages}
+                  onClick={() => dispatch(setPage(page + 1))}
+                  data-testid="button-next-page"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
 
       <ReleaseFormModal
         open={createModalOpen}

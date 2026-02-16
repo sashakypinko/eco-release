@@ -1,0 +1,275 @@
+How to Build a Kanban Board with Drag-and-Drop (React + @dnd-kit)
+Overview
+A Kanban board displays items grouped into columns by status. Users drag cards between columns to change an item's status, and reorder cards within the same column to change sort priority. The board uses optimistic UI — the card moves immediately in the interface while a server request runs in the background. If the request fails, the card reverts to its original position.
+
+Libraries: @dnd-kit/core, @dnd-kit/sortable, @dnd-kit/utilities
+
+Data Model
+The board needs two data sources:
+
+Statuses — the list of columns. Each status has at minimum an id and name. The statuses define which columns exist and their display order.
+Items — the entities shown as cards. Each item has at minimum an id, a reference to its current status (e.g. statusId), and a sortOrder (integer for ordering within a column).
+interface Status {
+  id: number;
+  name: string;
+}
+interface KanbanItem {
+  id: number;
+  statusId: number;
+  sortOrder: number;
+  // ...any other fields for display
+}
+Component Architecture
+The board is composed of four components:
+
+1. KanbanBoard (main orchestrator)
+The top-level component. It:
+
+Receives items, statuses, isLoading, error as props
+Groups items into columns by status
+Manages all drag-and-drop state and logic
+Manages local (optimistic) column state during drag operations
+Sends reorder/move requests to the server on drag end
+2. DroppableColumn
+Each column is a drop target. It:
+
+Uses useDroppable from @dnd-kit/core with id column-{statusId}
+Wraps its cards in <SortableContext> for within-column reordering
+Shows a visual indicator when a card is dragged over it (isOver state)
+Displays a "No items" placeholder when the column is empty
+Supports collapsing to save horizontal space (optional feature)
+3. SortableCard
+Each card is both draggable and a drop target. It:
+
+Uses useSortable from @dnd-kit/sortable with id item-{itemId}
+Attaches data: { type: 'card', item } so the drag handlers can identify what's being dragged
+Applies CSS.Transform.toString(transform) and transition for smooth movement
+Reduces opacity when being dragged (isDragging ? 0.3 : 1)
+Delegates rendering to a pure presentational CardContent component
+4. CardContent (presentational)
+A pure rendering component for the card's visual content. Used in two places:
+
+Inside SortableCard for cards in the board
+Inside DragOverlay for the floating card that follows the cursor
+It receives an isOverlay flag to style the floating version differently (e.g. shadow, ring).
+
+Drag-and-Drop Setup
+Sensors
+const sensors = useSensors(
+  useSensor(PointerSensor, {
+    activationConstraint: { distance: canReorder ? 5 : Infinity },
+  }),
+  useSensor(KeyboardSensor),
+);
+distance: 5 means the user must move 5px before a drag starts, preventing accidental drags on click
+Set distance: Infinity to disable dragging entirely (read-only mode / no permission)
+KeyboardSensor provides accessibility support
+Collision Detection
+The default collision detection doesn't work well for Kanban because cards and columns overlap. Use a custom strategy:
+
+const customCollisionDetection: CollisionDetection = (args) => {
+  const pointerCollisions = pointerWithin(args);
+  if (pointerCollisions.length > 0) {
+    // Prefer card collisions over column collisions
+    const cardCollision = pointerCollisions.find((c) =>
+      String(c.id).startsWith('item-')
+    );
+    if (cardCollision) return [cardCollision];
+    const columnCollision = pointerCollisions.find((c) =>
+      String(c.id).startsWith('column-')
+    );
+    if (columnCollision) return [columnCollision];
+    return pointerCollisions;
+  }
+  return rectIntersection(args);
+};
+Why: When dragging a card over another card, both the card and the column register as collision targets. The custom strategy prioritizes card-level collisions (for precise insertion position) and falls back to column-level collisions (for dropping into empty areas or at the end of a column).
+
+DragOverlay
+<DragOverlay dropAnimation={null}>
+  {activeCard ? (
+    <div style={{ width: CARD_WIDTH }}>
+      <CardContent item={activeCard} isOverlay />
+    </div>
+  ) : null}
+</DragOverlay>
+dropAnimation={null} disables the default drop animation for snappier feel
+The overlay renders a copy of the card that follows the cursor
+isOverlay flag adds shadow/ring to distinguish it from cards in the board
+The original card remains in place but with reduced opacity
+State Management: The Dual-State Pattern
+This is the most critical architectural decision. The board maintains two parallel representations of column data:
+
+Server state (serverGrouped) — derived from the items prop via useMemo. This is the source of truth from the server.
+Local state (localColumns) — a mutable copy used only during and immediately after drag operations.
+const [localColumns, setLocalColumns] = useState<Map<number, Item[]> | null>(null);
+const localColumnsRef = useRef<Map<number, Item[]> | null>(null);
+const pendingMoveRef = useRef<{ itemId: number; targetStatusId: number } | null>(null);
+// The board always renders from `grouped`:
+const grouped = localColumns || serverGrouped;
+Why a ref AND state? The ref (localColumnsRef) is needed because drag event handlers fire rapidly and need synchronous access to the latest column layout. React state updates are asynchronous, so reading localColumns inside a handler would give stale data. The state (localColumns) triggers re-renders. Both are always updated together.
+
+Lifecycle:
+1. User starts dragging
+   → Copy serverGrouped into localColumns
+   → All renders now use localColumns
+2. User drags over columns/cards
+   → Mutate localColumns to show the card in its new position
+   → Board re-renders with the card in the new spot
+3. User drops the card
+   → Calculate what changed (status change? sort order change?)
+   → Send changes to server
+   → If status changed: set pendingMoveRef, keep localColumns visible
+   → If only reorder: clear localColumns immediately on success
+4. Server responds with updated data
+   → serverGrouped recalculates from new props
+   → useEffect detects the moved card in serverGrouped
+   → Clears pendingMoveRef and localColumns
+   → Board now renders from serverGrouped again
+5. If server request fails
+   → Clear pendingMoveRef and localColumns
+   → Board reverts to serverGrouped (card snaps back)
+Drag Event Handlers
+onDragStart
+const handleDragStart = (event: DragStartEvent) => {
+  const data = event.active.data.current;
+  if (data?.type === 'card') {
+    setActiveCard(data.item);
+    // Initialize localColumns as a deep copy of serverGrouped
+    const initial = new Map(
+      Array.from(serverGrouped.entries()).map(([k, v]) => [k, [...v]])
+    );
+    updateLocalColumns(initial);
+  }
+};
+onDragOver
+This fires continuously as the card moves. It handles two scenarios:
+
+Same column reorder:
+
+Card dragged over another card in the same column
+→ Use arrayMove to swap positions in localColumns
+Cross-column move:
+
+Card dragged over a different column (or a card in a different column)
+→ Remove card from source column
+→ Insert card into target column at the correct position
+   - If hovering over a card: insert at that card's index
+   - If hovering over empty column area: append to end
+Important: Always create new Map/Array instances when updating localColumns. Never mutate in place — React won't detect the change.
+
+onDragEnd
+This fires once when the user releases the card. It:
+
+Reads the final state from localColumnsRef
+Compares each card's current position/status against the original data
+Builds a list of changes: { id, sort_order, statusId? }
+Only includes items that actually changed (status or sort order)
+Sends the batch update to the server
+Manages the optimistic UI cleanup (see below)
+const reorderItems = [];
+for (const [statusId, cards] of finalColumns.entries()) {
+  cards.forEach((card, index) => {
+    const original = itemMap.get(card.id);
+    const newSortOrder = index + 1;
+    const statusChanged = original.statusId !== statusId;
+    const sortOrderChanged = original.sortOrder !== newSortOrder;
+    if (statusChanged || sortOrderChanged) {
+      const item = { id: card.id, sort_order: newSortOrder };
+      if (statusChanged) item.statusId = statusId;
+      reorderItems.push(item);
+    }
+  });
+}
+onDragCancel
+Clear everything — reset activeCard, localColumns, and localColumnsRef.
+
+Optimistic UI: Keeping Cards in Place During Server Requests
+The key challenge: after the user drops a card into a new column, the server hasn't confirmed the change yet. If you clear localColumns immediately, the board falls back to serverGrouped which still has the old data — the card visually jumps back to its original column, then jumps forward again when the server responds. This creates a jarring flicker.
+
+Solution: pendingMoveRef + useEffect
+
+When a cross-column move happens:
+
+// In handleDragEnd, after sending the request:
+if (statusChangeItem) {
+  pendingMoveRef.current = {
+    itemId: statusChangeItem.id,
+    targetStatusId: statusChangeItem.statusId,
+  };
+  // DON'T clear localColumns yet — keep the card in the new column
+}
+Then a useEffect watches for the server data to catch up:
+
+useEffect(() => {
+  const pending = pendingMoveRef.current;
+  if (!pending || !localColumns) return;
+  // Check if the server data now shows the card in the target column
+  const serverList = serverGrouped.get(pending.targetStatusId) || [];
+  if (serverList.some((item) => item.id === pending.itemId)) {
+    // Server confirmed the move — safe to clear local state
+    pendingMoveRef.current = null;
+    localColumnsRef.current = null;
+    setLocalColumns(null);
+  }
+}, [serverGrouped, localColumns]);
+For same-column reorders (no status change), there's no pending move ref. Clear localColumns immediately on success because there's no visual jump — the items are already in the right column.
+
+On error, always clear everything. The card snaps back to its original position. Optionally show a toast notification.
+
+Server API Design
+The reorder endpoint should accept a batch of changes:
+
+PUT /api/{entity}/reorder
+Body: {
+  items: [
+    { id: 1, sort_order: 1, status_id: 5 },
+    { id: 2, sort_order: 2 },
+    { id: 3, sort_order: 3 },
+  ]
+}
+sort_order is always included (1-based index within the column)
+status_id is only included when the item moved to a different column
+The server should update all items in a single transaction
+After the mutation, the query cache should be invalidated so fresh data flows back as new props
+Column Features
+Collapsible Columns
+Each column can be collapsed to a narrow strip (48px) showing only the status name rotated vertically and the item count badge. This saves horizontal space when certain statuses are rarely used.
+
+Track collapsed state as a Set<number> of status IDs
+Persist to localStorage so the preference survives page reloads
+When collapsed, the column's droppable area is hidden (cards can't be dropped into collapsed columns)
+Clicking the column header toggles collapse/expand
+Column Styling
+Use isOver from useDroppable to add a subtle highlight (e.g. bg-primary/5 ring-1 ring-primary/20) when a card is being dragged over the column
+Empty columns show a dashed border placeholder: "No items"
+All statuses always appear as columns, even if empty — this lets users drag cards into any status
+Loading & Error States
+Loading: Show skeleton columns (4 columns with 3 skeleton cards each) to indicate the board structure before data arrives.
+
+Error: Show a centered error message.
+
+Permissions
+The board should accept a canReorder prop (or similar). When false:
+
+Set pointer sensor distance to Infinity (disables drag activation)
+Drag handlers return early with if (!canReorder) return
+Cards still show cursor-grab but dragging never activates
+Similarly, action buttons (edit, delete) should be conditionally rendered based on permission props.
+
+Data Fetching Considerations
+When in Kanban mode, the parent page should:
+
+Fetch a larger page size (e.g. 100 items) since all items are visible at once
+Sort by sortOrder ascending so cards appear in the correct order within columns
+The statuses list should be fetched separately (it rarely changes) and defines the column structure
+Key Patterns Summary
+Pattern	Purpose
+Dual-state (serverGrouped + localColumns)	Optimistic UI without flicker
+localColumnsRef (ref)	Synchronous access in rapid drag events
+pendingMoveRef	Keeps card in new column until server confirms
+useEffect watching serverGrouped	Detects when server data catches up to clear local state
+Custom collision detection	Prioritizes card-level over column-level collisions
+DragOverlay with isOverlay flag	Floating card copy follows cursor
+Batch reorder endpoint	Single request for all position/status changes
+Change diffing in handleDragEnd	Only sends items that actually changed

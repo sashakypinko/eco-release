@@ -1,15 +1,19 @@
 import { createApi } from "@reduxjs/toolkit/query/react";
 import { baseQuery } from "@/app/baseQuery";
-import type { ReleasesListResponse, ReleaseDetailResponse } from "@/shared/types";
+import type { ReleasesListResponse, ReleaseDetailResponse, Release } from "@/shared/types";
 
 export const releasesApi = createApi({
   reducerPath: "releasesApi",
   baseQuery,
-  tagTypes: ["Releases", "ReleaseDetail"],
+  tagTypes: ["Releases", "ReleaseDetail", "ReleasesBoard"],
   endpoints: (builder) => ({
     getReleases: builder.query<ReleasesListResponse, string>({
       query: (queryString) => `/releases?${queryString}`,
       providesTags: ["Releases"],
+    }),
+    getReleasesBoard: builder.query<Release[], string>({
+      query: (queryString) => `/releases/board?${queryString}`,
+      providesTags: ["ReleasesBoard"],
     }),
     getReleaseById: builder.query<ReleaseDetailResponse, string>({
       query: (id) => `/releases/${id}`,
@@ -70,11 +74,20 @@ export const releasesApi = createApi({
       }),
       invalidatesTags: ["ReleaseDetail"],
     }),
+    reorderReleases: builder.mutation<any, { items: Array<{ id: number; sort_order: number; status?: string }>; userId?: number }>({
+      query: (body) => ({
+        url: "/releases/reorder",
+        method: "PUT",
+        body,
+      }),
+      invalidatesTags: ["Releases", "ReleasesBoard", "ReleaseDetail"],
+    }),
   }),
 });
 
 export const {
   useGetReleasesQuery,
+  useGetReleasesBoardQuery,
   useGetReleaseByIdQuery,
   useCreateReleaseMutation,
   useUpdateReleaseMutation,
@@ -82,4 +95,5 @@ export const {
   useCreateHistoryMutation,
   useUpdateHistoryMutation,
   useUpdateChecklistItemStateMutation,
+  useReorderReleasesMutation,
 } = releasesApi;

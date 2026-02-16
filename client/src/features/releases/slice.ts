@@ -1,5 +1,7 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
+type ViewMode = "table" | "board";
+
 interface ReleasesState {
   search: string;
   statusFilter: string;
@@ -8,6 +10,7 @@ interface ReleasesState {
   dateFilter: string;
   page: number;
   pageSize: number;
+  viewMode: ViewMode;
 }
 
 const initialState: ReleasesState = {
@@ -18,6 +21,7 @@ const initialState: ReleasesState = {
   dateFilter: "",
   page: 1,
   pageSize: 25,
+  viewMode: "table",
 };
 
 const releasesSlice = createSlice({
@@ -47,6 +51,9 @@ const releasesSlice = createSlice({
     setPage(state, action: PayloadAction<number>) {
       state.page = action.payload;
     },
+    setViewMode(state, action: PayloadAction<ViewMode>) {
+      state.viewMode = action.payload;
+    },
     clearFilters(state) {
       state.search = "";
       state.statusFilter = "all";
@@ -58,6 +65,6 @@ const releasesSlice = createSlice({
   },
 });
 
-export const { setSearch, setStatusFilter, setProductFilter, setUserFilter, setDateFilter, setPage, clearFilters } = releasesSlice.actions;
+export const { setSearch, setStatusFilter, setProductFilter, setUserFilter, setDateFilter, setPage, setViewMode, clearFilters } = releasesSlice.actions;
 
 export default releasesSlice.reducer;

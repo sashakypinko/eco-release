@@ -118,6 +118,8 @@ A full-stack Release Management System that connects to an external MySQL databa
 
 ## API Endpoints
 - `GET/POST /api/releases` - List/create releases (supports filters: product_id, user_id, status, search, page, page_size)
+- `GET /api/releases/board` - All releases for Kanban board (no pagination, sorted by sort_order)
+- `PUT /api/releases/reorder` - Batch reorder releases (body: {items: [{id, sort_order, status?}], userId?})
 - `GET/PUT/DELETE /api/releases/:id` - CRUD single release
 - `GET /api/releases/:id/histories` - List release histories
 - `POST/PUT/DELETE /api/release-histories[/:id]` - CRUD release histories
@@ -153,6 +155,9 @@ releases, release_histories, release_checklist_items, release_checklist_template
 - Module Federation build outputs remoteEntry.js for host consumption
 
 ## Recent Changes
+- 2026-02-16: Added Kanban board view for releases with drag-and-drop (@dnd-kit), optimistic UI, batch reorder API, status columns
+- 2026-02-16: Added sort_order column to releases table with auto-migration on startup
+- 2026-02-16: Added view mode toggle (Table/Board) to ReleasesListPage with separate board API endpoint
 - 2026-02-16: Converted Create/Edit Release and History forms to modal dialogs (ReleaseFormModal, HistoryFormModal)
 - 2026-02-16: Added colored icons to all Details section fields (GitCommitVertical, Package, Briefcase, Contact, Calendar, etc.)
 - 2026-02-16: Added inline status change dropdown in Quick Info section; Quick Info is now sticky

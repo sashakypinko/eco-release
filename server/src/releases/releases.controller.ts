@@ -33,6 +33,39 @@ export class ReleasesController {
     return this.releasesService.getReleases(filters);
   }
 
+  @Get('board')
+  @RequirePermission('release:view')
+  async board(
+    @Query('product_id') productId?: string,
+    @Query('user_id') userId?: string,
+    @Query('search') search?: string,
+  ) {
+    const filters = {
+      productId: productId ? Number(productId) : undefined,
+      userId: userId ? Number(userId) : undefined,
+      search: search || undefined,
+    };
+    return this.releasesService.getReleasesForBoard(filters);
+  }
+
+  @Put('reorder')
+  @RequirePermission('release:edit')
+  async reorder(@Body() body: { items: Array<{ id: number; sort_order: number; status?: string }>; userId?: number }) {
+    if (!body.items || !Array.isArray(body.items)) {
+      throw new BadRequestException('items array is required');
+    }
+    const validStatuses = [
+      "Created", "Release In Progress", "PO Review provided",
+      "Released to Dev", "Approved to Release to Production", "Released to Production",
+    ];
+    for (const item of body.items) {
+      if (item.status && !validStatuses.includes(item.status)) {
+        throw new BadRequestException(`Invalid status: ${item.status}`);
+      }
+    }
+    return this.releasesService.reorderReleases(body.items, body.userId);
+  }
+
   @Get(':id')
   @RequirePermission('release:view')
   async findOne(@Param('id', ParseIntPipe) id: number) {

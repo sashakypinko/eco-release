@@ -1,5 +1,5 @@
-import { Module, Global, OnModuleDestroy } from '@nestjs/common';
-import { createDatabase, closeDatabase, Database } from './database.factory';
+import { Module, Global, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { createDatabase, closeDatabase, runMigrations, Database } from './database.factory';
 
 const { db, schema } = createDatabase();
 
@@ -19,7 +19,11 @@ export { Database };
   ],
   exports: ['DATABASE', 'SCHEMA'],
 })
-export class DatabaseModule implements OnModuleDestroy {
+export class DatabaseModule implements OnModuleInit, OnModuleDestroy {
+  async onModuleInit() {
+    await runMigrations();
+  }
+
   async onModuleDestroy() {
     await closeDatabase();
   }

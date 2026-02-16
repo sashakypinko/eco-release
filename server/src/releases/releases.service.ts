@@ -1,5 +1,5 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { eq, and, like, desc, asc, sql } from 'drizzle-orm';
+import { eq, and, like, desc, asc, sql, inArray } from 'drizzle-orm';
 import type { Database } from '../database/database.module';
 import { insertReturning } from '../database/db.util';
 
@@ -196,6 +196,88 @@ export class ReleasesService {
     }
     await (this.db as any).delete(schema.releaseHistories).where(eq(schema.releaseHistories.releaseId, id));
     await (this.db as any).delete(schema.releases).where(eq(schema.releases.id, id));
+  }
+
+  async getReleasesForBoard(filters: {
+    productId?: number;
+    userId?: number;
+    search?: string;
+  } = {}) {
+    const conditions: any[] = [];
+    if (filters.productId) {
+      conditions.push(eq(schema.releases.productId, filters.productId));
+    }
+    if (filters.userId) {
+      conditions.push(eq(schema.releases.userId, filters.userId));
+    }
+    if (filters.search) {
+      conditions.push(like(schema.releases.version, `%${filters.search}%`));
+    }
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const rows = await (this.db as any)
+      .select()
+      .from(schema.releases)
+      .leftJoin(schema.products, eq(schema.releases.productId, schema.products.id))
+      .leftJoin(schema.users, eq(schema.releases.userId, schema.users.id))
+      .where(whereClause)
+      .orderBy(asc(schema.releases.sortOrder), desc(schema.releases.createdAt))
+      .limit(200);
+
+    const data: any[] = [];
+    for (const row of rows) {
+      const latestHistory = await (this.db as any)
+        .select()
+        .from(schema.releaseHistories)
+        .where(eq(schema.releaseHistories.releaseId, row.releases.id))
+        .orderBy(desc(schema.releaseHistories.createdAt))
+        .limit(1);
+
+      data.push({
+        ...row.releases,
+        product: row.products,
+        user: row.users,
+        latestStatus: latestHistory[0]?.status || row.releases.status,
+      });
+    }
+    return data;
+  }
+
+  async reorderReleases(items: Array<{ id: number; sort_order: number; status?: string }>, userId?: number) {
+    const statusChanges: Array<{ id: number; status: string; environment: string }> = [];
+
+    for (const item of items) {
+      const updateData: any = { sortOrder: item.sort_order };
+      if (item.status) {
+        updateData.status = item.status;
+      }
+      await (this.db as any)
+        .update(schema.releases)
+        .set(updateData)
+        .where(eq(schema.releases.id, item.id));
+
+      if (item.status) {
+        const [release] = await (this.db as any)
+          .select()
+          .from(schema.releases)
+          .where(eq(schema.releases.id, item.id));
+        if (release) {
+          statusChanges.push({ id: item.id, status: item.status, environment: release.environment });
+        }
+      }
+    }
+
+    for (const change of statusChanges) {
+      const historyData = {
+        releaseId: change.id,
+        releaseManagerUserId: userId || 1,
+        status: change.status,
+        environment: change.environment,
+      };
+      await insertReturning(this.db, schema.releaseHistories, historyData);
+    }
+
+    return { updated: items.length };
   }
 
   private async autoGenerateChecklistItems(releaseHistoryId: number, productId: number, environment: string) {

@@ -153,6 +153,11 @@ releases, release_histories, release_checklist_items, release_checklist_template
 - Module Federation build outputs remoteEntry.js for host consumption
 
 ## Recent Changes
+- 2026-02-16: Converted Create/Edit Release and History forms to modal dialogs (ReleaseFormModal, HistoryFormModal)
+- 2026-02-16: Added colored icons to all Details section fields (GitCommitVertical, Package, Briefcase, Contact, Calendar, etc.)
+- 2026-02-16: Added inline status change dropdown in Quick Info section; Quick Info is now sticky
+- 2026-02-16: Smoke Test results now shown in History card main row without expanding
+- 2026-02-16: Removed form page routes from AppContent (forms are now modal-based)
 - 2026-02-10: Added micro-frontend / Module Federation support (RemoteApp mount/unmount, AuthProvider, ApiProvider, configurable baseQuery, vite.federation.config.ts, manifest.json, bootstrap.tsx)
 - 2026-02-10: Added NestJS PermissionGuard with @RequirePermission decorators and permission registry endpoint
 - 2026-02-10: Added external navigation support via releaseManagerNavigate custom events

@@ -19,6 +19,7 @@ import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { setSearch, setStatusFilter, setProductFilter, setUserFilter, setDateFilter, setPage, clearFilters } from "./slice";
 import { useGetReleasesQuery } from "./api";
 import { useGetProductsQuery, useGetUsersQuery } from "@/features/reference-data/api";
+import ReleaseFormModal from "./ReleaseFormModal";
 
 export default function ReleasesListPage() {
   const [, navigate] = useLocation();
@@ -26,6 +27,7 @@ export default function ReleasesListPage() {
   const dispatch = useAppDispatch();
   const { search, statusFilter, productFilter, userFilter, dateFilter, page, pageSize } = useAppSelector((s) => s.releases);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
 
   const { data: productsData } = useGetProductsQuery();
   const { data: usersData } = useGetUsersQuery();
@@ -54,7 +56,7 @@ export default function ReleasesListPage() {
           <p className="text-sm text-muted-foreground mt-1">Manage your software releases and deployments</p>
         </div>
         {hasPermission("release:create") && (
-          <Button onClick={() => navigate("/releases/new")} data-testid="button-create-release">
+          <Button onClick={() => setCreateModalOpen(true)} data-testid="button-create-release">
             <Plus className="w-4 h-4 mr-2" />
             New Release
           </Button>
@@ -231,7 +233,7 @@ export default function ReleasesListPage() {
                       <RocketIcon className="w-10 h-10 text-muted-foreground/50" />
                       <p className="text-muted-foreground">No releases found</p>
                       {hasPermission("release:create") && (
-                        <Button variant="outline" size="sm" onClick={() => navigate("/releases/new")} data-testid="button-create-first-release">
+                        <Button variant="outline" size="sm" onClick={() => setCreateModalOpen(true)} data-testid="button-create-first-release">
                           Create your first release
                         </Button>
                       )}
@@ -274,6 +276,12 @@ export default function ReleasesListPage() {
           </div>
         )}
       </Card>
+
+      <ReleaseFormModal
+        open={createModalOpen}
+        onClose={() => setCreateModalOpen(false)}
+        onSuccess={(id) => navigate(`/releases/${id}`)}
+      />
     </div>
   );
 }

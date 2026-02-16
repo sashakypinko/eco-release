@@ -22,14 +22,22 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ExternalLink, Calendar as CalendarIcon, User, GripVertical } from "lucide-react";
+import { ExternalLink, Calendar as CalendarIcon, User, MoreHorizontal, ChevronDown, ChevronRight, Eye, Pencil, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { StatusBadge, EnvironmentBadge } from "@/shared/StatusBadge";
+import { EnvironmentBadge } from "@/shared/StatusBadge";
 import { STATUS_OPTIONS, statusVariant } from "@/shared/constants";
 import { formatDate } from "@/shared/utils";
 import { useAuth } from "@/providers/AuthProvider";
-import { useReorderReleasesMutation } from "./api";
+import { useReorderReleasesMutation, useDeleteReleaseMutation } from "./api";
+import { useToast } from "@/hooks/use-toast";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import ReleaseFormModal from "./ReleaseFormModal";
 import type { Release } from "@/shared/types";
 
 interface KanbanBoardProps {
@@ -38,7 +46,20 @@ interface KanbanBoardProps {
   error?: any;
 }
 
-const CARD_WIDTH = 280;
+const COLLAPSED_KEY = "kanban-collapsed-columns";
+
+function getCollapsedColumns(): Record<string, boolean> {
+  try {
+    const stored = localStorage.getItem(COLLAPSED_KEY);
+    return stored ? JSON.parse(stored) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveCollapsedColumns(collapsed: Record<string, boolean>) {
+  localStorage.setItem(COLLAPSED_KEY, JSON.stringify(collapsed));
+}
 
 function CardContent({ item, isOverlay = false }: { item: Release; isOverlay?: boolean }) {
   return (
@@ -49,9 +70,9 @@ function CardContent({ item, isOverlay = false }: { item: Release; isOverlay?: b
       data-testid={`kanban-card-${item.id}`}
     >
       <div className="flex items-start justify-between gap-2">
-        <span className="font-mono text-sm font-medium truncate">{item.version}</span>
-        <span className="text-xs text-muted-foreground font-mono shrink-0">#{item.id}</span>
+        <span className="text-xs text-muted-foreground font-mono">#{item.id}</span>
       </div>
+      <p className="font-medium text-sm truncate">{item.version}</p>
       {item.product && (
         <p className="text-xs text-muted-foreground truncate">{item.product.name}</p>
       )}
@@ -90,7 +111,74 @@ function CardContent({ item, isOverlay = false }: { item: Release; isOverlay?: b
   );
 }
 
-function SortableCard({ item, onClick }: { item: Release; onClick: () => void }) {
+function CardContextMenu({
+  item,
+  onView,
+  onEdit,
+  onDelete,
+  canEdit,
+  canDelete,
+}: {
+  item: Release;
+  onView: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  canEdit: boolean;
+  canDelete: boolean;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className="absolute top-2 right-2 p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-muted transition-opacity z-20"
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          data-testid={`kanban-card-menu-${item.id}`}
+        >
+          <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-36" onClick={(e) => e.stopPropagation()}>
+        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onView(); }} data-testid={`kanban-card-view-${item.id}`}>
+          <Eye className="w-4 h-4 mr-2" />
+          View
+        </DropdownMenuItem>
+        {canEdit && (
+          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(); }} data-testid={`kanban-card-edit-${item.id}`}>
+            <Pencil className="w-4 h-4 mr-2" />
+            Edit
+          </DropdownMenuItem>
+        )}
+        {canDelete && (
+          <DropdownMenuItem
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            className="text-destructive focus:text-destructive"
+            data-testid={`kanban-card-delete-${item.id}`}
+          >
+            <Trash2 className="w-4 h-4 mr-2" />
+            Delete
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function SortableCard({
+  item,
+  onClick,
+  onEdit,
+  onDelete,
+  canEdit,
+  canDelete,
+}: {
+  item: Release;
+  onClick: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  canEdit: boolean;
+  canDelete: boolean;
+}) {
   const {
     attributes,
     listeners,
@@ -103,24 +191,47 @@ function SortableCard({ item, onClick }: { item: Release; onClick: () => void })
     data: { type: "card", item },
   });
 
+  const wasDragging = useRef(false);
+
+  useEffect(() => {
+    if (isDragging) {
+      wasDragging.current = true;
+    }
+  }, [isDragging]);
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.3 : 1,
   };
 
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    if (wasDragging.current) {
+      wasDragging.current = false;
+      e.stopPropagation();
+      return;
+    }
+    onClick();
+  }, [onClick]);
+
   return (
-    <div ref={setNodeRef} style={style} {...attributes}>
-      <div className="relative group cursor-pointer" onClick={onClick}>
-        <div
-          className="absolute left-0 top-0 bottom-0 w-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing z-10"
-          {...listeners}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <GripVertical className="w-4 h-4 text-muted-foreground" />
-        </div>
-        <CardContent item={item} />
-      </div>
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className="relative group cursor-grab active:cursor-grabbing"
+      onClick={handleClick}
+    >
+      <CardContextMenu
+        item={item}
+        onView={onClick}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        canEdit={canEdit}
+        canDelete={canDelete}
+      />
+      <CardContent item={item} />
     </div>
   );
 }
@@ -129,12 +240,24 @@ function DroppableColumn({
   statusName,
   items,
   onCardClick,
+  onCardEdit,
+  onCardDelete,
+  canEdit,
+  canDelete,
   isOver,
+  collapsed,
+  onToggleCollapse,
 }: {
   statusName: string;
   items: Release[];
   onCardClick: (id: number) => void;
+  onCardEdit: (id: number) => void;
+  onCardDelete: (id: number) => void;
+  canEdit: boolean;
+  canDelete: boolean;
   isOver: boolean;
+  collapsed: boolean;
+  onToggleCollapse: () => void;
 }) {
   const { setNodeRef } = useDroppable({
     id: `column-${statusName}`,
@@ -143,19 +266,40 @@ function DroppableColumn({
   const sortableIds = items.map((i) => `item-${i.id}`);
   const variant = statusVariant[statusName] || "bg-muted text-muted-foreground";
 
+  if (collapsed) {
+    return (
+      <div
+        className="flex flex-col items-center w-10 rounded-lg border bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors py-2"
+        onClick={onToggleCollapse}
+        data-testid={`kanban-column-collapsed-${statusName}`}
+      >
+        <ChevronRight className="w-4 h-4 text-muted-foreground mb-2 shrink-0" />
+        <Badge className={`${variant} no-default-hover-elevate no-default-active-elevate text-xs shrink-0 [writing-mode:vertical-lr] rotate-180 py-1.5 px-1`}>
+          {statusName}
+        </Badge>
+        <span className="text-xs text-muted-foreground font-medium mt-2 shrink-0">{items.length}</span>
+      </div>
+    );
+  }
+
   return (
     <div
-      className={`flex flex-col min-w-[300px] max-w-[320px] rounded-lg border transition-colors ${
+      className={`flex flex-col min-w-[280px] max-w-[300px] rounded-lg border transition-colors ${
         isOver ? "bg-primary/5 ring-1 ring-primary/20" : "bg-muted/30"
       }`}
     >
-      <div className="px-3 py-2.5 border-b flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <Badge className={`${variant} no-default-hover-elevate no-default-active-elevate text-xs shrink-0`}>
-            {statusName}
-          </Badge>
-        </div>
-        <span className="text-xs text-muted-foreground font-medium shrink-0">{items.length}</span>
+      <div className="px-3 py-2.5 border-b flex items-center gap-2">
+        <button
+          onClick={onToggleCollapse}
+          className="p-0.5 rounded hover:bg-muted transition-colors shrink-0"
+          data-testid={`kanban-column-toggle-${statusName}`}
+        >
+          <ChevronDown className="w-4 h-4 text-muted-foreground" />
+        </button>
+        <Badge className={`${variant} no-default-hover-elevate no-default-active-elevate text-xs shrink-0`}>
+          {statusName}
+        </Badge>
+        <span className="text-xs text-muted-foreground font-medium shrink-0 ml-auto">{items.length}</span>
       </div>
       <div
         ref={setNodeRef}
@@ -168,11 +312,15 @@ function DroppableColumn({
                 key={item.id}
                 item={item}
                 onClick={() => onCardClick(item.id)}
+                onEdit={() => onCardEdit(item.id)}
+                onDelete={() => onCardDelete(item.id)}
+                canEdit={canEdit}
+                canDelete={canDelete}
               />
             ))
           ) : (
             <div className="flex items-center justify-center h-20 border border-dashed rounded-md text-xs text-muted-foreground">
-              No items
+              No Items
             </div>
           )}
         </SortableContext>
@@ -184,15 +332,39 @@ function DroppableColumn({
 export default function KanbanBoard({ items, isLoading, error }: KanbanBoardProps) {
   const [, navigate] = useLocation();
   const { hasPermission } = useAuth();
+  const { toast } = useToast();
   const canReorder = hasPermission("release:edit");
+  const canEdit = hasPermission("release:edit");
+  const canDelete = hasPermission("release:delete");
 
   const [reorderReleases] = useReorderReleasesMutation();
+  const [deleteRelease] = useDeleteReleaseMutation();
 
   const [activeCard, setActiveCard] = useState<Release | null>(null);
   const [localColumns, setLocalColumns] = useState<Map<string, Release[]> | null>(null);
   const localColumnsRef = useRef<Map<string, Release[]> | null>(null);
   const pendingMoveRef = useRef<{ itemId: number; targetStatus: string } | null>(null);
   const [overColumnId, setOverColumnId] = useState<string | null>(null);
+
+  const [collapsedColumns, setCollapsedColumns] = useState<Record<string, boolean>>(getCollapsedColumns);
+  const [editReleaseId, setEditReleaseId] = useState<string | null>(null);
+
+  const toggleCollapse = useCallback((status: string) => {
+    setCollapsedColumns((prev) => {
+      const next = { ...prev, [status]: !prev[status] };
+      saveCollapsedColumns(next);
+      return next;
+    });
+  }, []);
+
+  const handleDelete = useCallback(async (id: number) => {
+    try {
+      await deleteRelease(String(id)).unwrap();
+      toast({ title: "Release deleted" });
+    } catch {
+      toast({ title: "Failed to delete release", variant: "destructive" });
+    }
+  }, [deleteRelease, toast]);
 
   const serverGrouped = useMemo(() => {
     const map = new Map<string, Release[]>();
@@ -423,7 +595,7 @@ export default function KanbanBoard({ items, isLoading, error }: KanbanBoardProp
     return (
       <div className="flex gap-4 overflow-x-auto pb-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="min-w-[300px] max-w-[320px] rounded-lg border bg-muted/30">
+          <div key={i} className="min-w-[280px] max-w-[300px] rounded-lg border bg-muted/30">
             <div className="px-3 py-2.5 border-b">
               <Skeleton className="h-5 w-24" />
             </div>
@@ -447,32 +619,49 @@ export default function KanbanBoard({ items, isLoading, error }: KanbanBoardProp
   }
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={customCollisionDetection}
-      onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
-      onDragEnd={handleDragEnd}
-      onDragCancel={handleDragCancel}
-    >
-      <div className="flex gap-4 overflow-x-auto pb-4" data-testid="kanban-board">
-        {STATUS_OPTIONS.map((status) => (
-          <DroppableColumn
-            key={status}
-            statusName={status}
-            items={grouped.get(status) || []}
-            onCardClick={(id) => navigate(`/releases/${id}`)}
-            isOver={overColumnId === status}
-          />
-        ))}
-      </div>
-      <DragOverlay dropAnimation={null}>
-        {activeCard ? (
-          <div style={{ width: CARD_WIDTH }}>
-            <CardContent item={activeCard} isOverlay />
-          </div>
-        ) : null}
-      </DragOverlay>
-    </DndContext>
+    <>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={customCollisionDetection}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+        onDragCancel={handleDragCancel}
+      >
+        <div className="flex gap-3 overflow-x-auto pb-4" data-testid="kanban-board">
+          {STATUS_OPTIONS.map((status) => (
+            <DroppableColumn
+              key={status}
+              statusName={status}
+              items={grouped.get(status) || []}
+              onCardClick={(id) => navigate(`/releases/${id}`)}
+              onCardEdit={(id) => setEditReleaseId(String(id))}
+              onCardDelete={handleDelete}
+              canEdit={canEdit}
+              canDelete={canDelete}
+              isOver={overColumnId === status}
+              collapsed={!!collapsedColumns[status]}
+              onToggleCollapse={() => toggleCollapse(status)}
+            />
+          ))}
+        </div>
+        <DragOverlay dropAnimation={null}>
+          {activeCard ? (
+            <div style={{ width: 280 }}>
+              <CardContent item={activeCard} isOverlay />
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+
+      {editReleaseId !== null && (
+        <ReleaseFormModal
+          open={true}
+          releaseId={editReleaseId}
+          onClose={() => setEditReleaseId(null)}
+          onSuccess={() => setEditReleaseId(null)}
+        />
+      )}
+    </>
   );
 }

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Plus, Search, X, ExternalLink, Calendar as CalendarIcon, User, ChevronLeft, ChevronRight, LayoutList, Kanban } from "lucide-react";
+import { Plus, Search, X, ExternalLink, Calendar as CalendarIcon, User, ChevronLeft, ChevronRight, LayoutGrid, Columns3 } from "lucide-react";
 import { format } from "date-fns";
 import { useAuth } from "@/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
@@ -63,25 +63,23 @@ export default function ReleasesListPage() {
           <p className="text-sm text-muted-foreground mt-1">Manage your software releases and deployments</p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex items-center border rounded-md overflow-hidden" data-testid="view-mode-toggle">
+          <div className="flex items-center gap-1" data-testid="view-mode-toggle">
             <Button
-              variant={viewMode === "table" ? "default" : "ghost"}
+              variant={viewMode === "table" ? "secondary" : "ghost"}
               size="sm"
-              className="rounded-none"
               onClick={() => dispatch(setViewMode("table"))}
               data-testid="button-view-table"
             >
-              <LayoutList className="w-4 h-4 mr-1" />
+              <LayoutGrid className="w-4 h-4 mr-1.5" />
               Table
             </Button>
             <Button
-              variant={viewMode === "board" ? "default" : "ghost"}
+              variant={viewMode === "board" ? "secondary" : "ghost"}
               size="sm"
-              className="rounded-none"
               onClick={() => dispatch(setViewMode("board"))}
               data-testid="button-view-board"
             >
-              <Kanban className="w-4 h-4 mr-1" />
+              <Columns3 className="w-4 h-4 mr-1.5" />
               Board
             </Button>
           </div>

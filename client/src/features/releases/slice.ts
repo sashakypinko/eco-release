@@ -5,8 +5,7 @@ interface ReleasesState {
   statusFilter: string;
   productFilter: string;
   userFilter: string;
-  dateFrom: string;
-  dateTo: string;
+  dateFilter: string;
   page: number;
   pageSize: number;
 }
@@ -16,8 +15,7 @@ const initialState: ReleasesState = {
   statusFilter: "all",
   productFilter: "all",
   userFilter: "all",
-  dateFrom: "",
-  dateTo: "",
+  dateFilter: "",
   page: 1,
   pageSize: 25,
 };
@@ -42,12 +40,8 @@ const releasesSlice = createSlice({
       state.userFilter = action.payload;
       state.page = 1;
     },
-    setDateFrom(state, action: PayloadAction<string>) {
-      state.dateFrom = action.payload;
-      state.page = 1;
-    },
-    setDateTo(state, action: PayloadAction<string>) {
-      state.dateTo = action.payload;
+    setDateFilter(state, action: PayloadAction<string>) {
+      state.dateFilter = action.payload;
       state.page = 1;
     },
     setPage(state, action: PayloadAction<number>) {
@@ -58,13 +52,12 @@ const releasesSlice = createSlice({
       state.statusFilter = "all";
       state.productFilter = "all";
       state.userFilter = "all";
-      state.dateFrom = "";
-      state.dateTo = "";
+      state.dateFilter = "";
       state.page = 1;
     },
   },
 });
 
-export const { setSearch, setStatusFilter, setProductFilter, setUserFilter, setDateFrom, setDateTo, setPage, clearFilters } = releasesSlice.actions;
+export const { setSearch, setStatusFilter, setProductFilter, setUserFilter, setDateFilter, setPage, clearFilters } = releasesSlice.actions;
 
 export default releasesSlice.reducer;

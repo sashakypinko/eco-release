@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { useLocation } from "wouter";
-import { Plus, Search, X, ExternalLink, Calendar, User, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Search, X, ExternalLink, Calendar as CalendarIcon, User, ChevronLeft, ChevronRight } from "lucide-react";
+import { format } from "date-fns";
 import { useAuth } from "@/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,11 +9,14 @@ import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
 import { StatusBadge, EnvironmentBadge } from "@/shared/StatusBadge";
 import { STATUS_OPTIONS } from "@/shared/constants";
 import { formatDate } from "@/shared/utils";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
-import { setSearch, setStatusFilter, setProductFilter, setUserFilter, setDateFrom, setDateTo, setPage, clearFilters } from "./slice";
+import { setSearch, setStatusFilter, setProductFilter, setUserFilter, setDateFilter, setPage, clearFilters } from "./slice";
 import { useGetReleasesQuery } from "./api";
 import { useGetProductsQuery, useGetUsersQuery } from "@/features/reference-data/api";
 
@@ -19,7 +24,8 @@ export default function ReleasesListPage() {
   const [, navigate] = useLocation();
   const { hasPermission } = useAuth();
   const dispatch = useAppDispatch();
-  const { search, statusFilter, productFilter, userFilter, dateFrom, dateTo, page, pageSize } = useAppSelector((s) => s.releases);
+  const { search, statusFilter, productFilter, userFilter, dateFilter, page, pageSize } = useAppSelector((s) => s.releases);
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   const { data: productsData } = useGetProductsQuery();
   const { data: usersData } = useGetUsersQuery();
@@ -31,12 +37,14 @@ export default function ReleasesListPage() {
   if (statusFilter !== "all") queryParams.set("status", statusFilter);
   if (productFilter !== "all") queryParams.set("product_id", productFilter);
   if (userFilter !== "all") queryParams.set("user_id", userFilter);
-  if (dateFrom) queryParams.set("date_from", dateFrom);
-  if (dateTo) queryParams.set("date_to", dateTo);
+  if (dateFilter) queryParams.set("date_from", dateFilter);
+  if (dateFilter) queryParams.set("date_to", dateFilter);
 
   const { data, isLoading } = useGetReleasesQuery(queryParams.toString());
 
-  const hasFilters = search || statusFilter !== "all" || productFilter !== "all" || userFilter !== "all" || dateFrom || dateTo;
+  const hasFilters = search || statusFilter !== "all" || productFilter !== "all" || userFilter !== "all" || dateFilter;
+
+  const selectedDate = dateFilter ? new Date(dateFilter + "T00:00:00") : undefined;
 
   return (
     <div className="p-6 space-y-6 max-w-full">
@@ -55,7 +63,7 @@ export default function ReleasesListPage() {
 
       <Card className="p-4">
         <div className="flex items-center gap-3 flex-wrap">
-          <div className="relative flex-1 min-w-[200px]">
+          <div className="relative flex-1 min-w-[180px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               placeholder="Search by version..."
@@ -66,7 +74,7 @@ export default function ReleasesListPage() {
             />
           </div>
           <Select value={statusFilter} onValueChange={(v) => dispatch(setStatusFilter(v))}>
-            <SelectTrigger className="w-[220px]" data-testid="select-status-filter">
+            <SelectTrigger className="w-[200px]" data-testid="select-status-filter">
               <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
             <SelectContent>
@@ -77,7 +85,7 @@ export default function ReleasesListPage() {
             </SelectContent>
           </Select>
           <Select value={productFilter} onValueChange={(v) => dispatch(setProductFilter(v))}>
-            <SelectTrigger className="w-[200px]" data-testid="select-product-filter">
+            <SelectTrigger className="w-[180px]" data-testid="select-product-filter">
               <SelectValue placeholder="Filter by product" />
             </SelectTrigger>
             <SelectContent>
@@ -88,7 +96,7 @@ export default function ReleasesListPage() {
             </SelectContent>
           </Select>
           <Select value={userFilter} onValueChange={(v) => dispatch(setUserFilter(v))}>
-            <SelectTrigger className="w-[200px]" data-testid="select-user-filter">
+            <SelectTrigger className="w-[180px]" data-testid="select-user-filter">
               <SelectValue placeholder="Filter by user" />
             </SelectTrigger>
             <SelectContent>
@@ -98,28 +106,39 @@ export default function ReleasesListPage() {
               ))}
             </SelectContent>
           </Select>
-        </div>
-        <div className="flex items-center gap-3 flex-wrap mt-3">
-          <div className="flex items-center gap-2">
-            <label className="text-sm text-muted-foreground whitespace-nowrap">From</label>
-            <Input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => dispatch(setDateFrom(e.target.value))}
-              className="w-[160px]"
-              data-testid="input-date-from"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-sm text-muted-foreground whitespace-nowrap">To</label>
-            <Input
-              type="date"
-              value={dateTo}
-              onChange={(e) => dispatch(setDateTo(e.target.value))}
-              className="w-[160px]"
-              data-testid="input-date-to"
-            />
-          </div>
+          <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-[180px] justify-start text-left font-normal",
+                  !dateFilter && "text-muted-foreground"
+                )}
+                data-testid="button-date-filter"
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {selectedDate ? format(selectedDate, "MMM d, yyyy") : "Pick a date"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={(day) => {
+                  if (day) {
+                    const yyyy = day.getFullYear();
+                    const mm = String(day.getMonth() + 1).padStart(2, "0");
+                    const dd = String(day.getDate()).padStart(2, "0");
+                    dispatch(setDateFilter(`${yyyy}-${mm}-${dd}`));
+                  } else {
+                    dispatch(setDateFilter(""));
+                  }
+                  setCalendarOpen(false);
+                }}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
           {hasFilters && (
             <Button variant="ghost" size="sm" onClick={() => dispatch(clearFilters())} data-testid="button-clear-filters">
               <X className="w-4 h-4 mr-1" />
@@ -180,17 +199,17 @@ export default function ReleasesListPage() {
                           Jira
                         </a>
                       ) : (
-                        <span className="text-muted-foreground">\u2014</span>
+                        <span className="text-muted-foreground">{"\u2014"}</span>
                       )}
                     </TableCell>
                     <TableCell>
                       {release.plannedReleaseDate ? (
                         <span className="text-sm inline-flex items-center gap-1">
-                          <Calendar className="w-3 h-3 text-muted-foreground" />
+                          <CalendarIcon className="w-3 h-3 text-muted-foreground" />
                           {formatDate(release.plannedReleaseDate)}
                         </span>
                       ) : (
-                        <span className="text-muted-foreground">\u2014</span>
+                        <span className="text-muted-foreground">{"\u2014"}</span>
                       )}
                     </TableCell>
                     <TableCell>
@@ -200,7 +219,7 @@ export default function ReleasesListPage() {
                           {release.user.name}
                         </span>
                       ) : (
-                        <span className="text-muted-foreground">\u2014</span>
+                        <span className="text-muted-foreground">{"\u2014"}</span>
                       )}
                     </TableCell>
                   </TableRow>

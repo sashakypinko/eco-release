@@ -1,0 +1,14 @@
+node_modules
+dist
+.git
+.gitignore
+.env
+.idea
+.vscode
+.replit
+.config
+.local
+.claude
+*.md
+*.tar.gz
+attached_assets

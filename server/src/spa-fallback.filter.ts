@@ -27,6 +27,17 @@ export class SpaFallbackFilter implements ExceptionFilter {
       return;
     }
 
+    // ORB protection: return 404 for requests with a file extension
+    // instead of serving index.html (prevents Opaque Response Blocking)
+    const urlPath = url.split('?')[0];
+    if (path.extname(urlPath)) {
+      response.status(404).json({
+        statusCode: 404,
+        message: 'Not Found',
+      });
+      return;
+    }
+
     const isDev = process.env.NODE_ENV === 'development';
 
     if (isDev && this.vite) {

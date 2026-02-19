@@ -1,0 +1,175 @@
+name: Build and Deploy (Production)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: registry.digitalocean.com/tetheree-registry
+  IMAGE_NAME: eco-release
+  NAMESPACE: eco-release
+
+jobs:
+  build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.meta.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Log in to DigitalOcean Container Registry
+        run: doctl registry login --expiry-seconds 1200
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: type=sha,prefix=main-
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64
+          push: ${{ github.ref == 'refs/heads/main' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to Production
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: v1.28.0
+
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: v3.12.0
+
+      - name: Configure kubectl
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+
+      - name: Create namespace
+        run: kubectl create namespace ${{ env.NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create registry secret
+        run: |
+          kubectl create secret docker-registry acr-secret \
+            --docker-server=${{ env.REGISTRY }} \
+            --docker-username=${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }} \
+            --docker-password=${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }} \
+            --namespace=${{ env.NAMESPACE }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create app secrets
+        run: |
+          kubectl create secret generic eco-release-secrets \
+            --from-literal=MYSQL_DATABASE="${{ secrets.MYSQL_DATABASE }}" \
+            --from-literal=MYSQL_USER="${{ secrets.MYSQL_USER }}" \
+            --from-literal=MYSQL_PASSWORD="${{ secrets.MYSQL_PASSWORD }}" \
+            --from-literal=MYSQL_HOST="${{ secrets.MYSQL_HOST }}" \
+            --from-literal=MYSQL_PORT="${{ secrets.MYSQL_PORT }}" \
+            --from-literal=SESSION_SECRET="${{ secrets.SESSION_SECRET }}" \
+            --from-literal=NODE_ENV="${{ secrets.NODE_ENV }}" \
+            --namespace=${{ env.NAMESPACE }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Clean up failed release
+        run: |
+          STATUS=$(helm status eco-release -n ${{ env.NAMESPACE }} -o json 2>/dev/null | jq -r '.info.status // empty')
+          if [ "$STATUS" = "failed" ] || [ "$STATUS" = "pending-install" ] || [ "$STATUS" = "pending-upgrade" ]; then
+            echo "Found release in '$STATUS' state, uninstalling..."
+            helm uninstall eco-release -n ${{ env.NAMESPACE }} --wait
+            kubectl delete pods -n ${{ env.NAMESPACE }} -l app.kubernetes.io/instance=eco-release --force --grace-period=0 2>/dev/null || true
+          fi
+
+      - name: Deploy with Helm
+        run: |
+          helm upgrade --install eco-release ./helm/app \
+            --namespace=${{ env.NAMESPACE }} \
+            -f helm/app/values-prod.yaml \
+            --set image.tag=main-${GITHUB_SHA::7} \
+            --set externalDatabase.host="${{ secrets.MYSQL_HOST }}" \
+            --set externalDatabase.port="${{ secrets.MYSQL_PORT }}" \
+            --set externalDatabase.user="${{ secrets.MYSQL_USER }}" \
+            --set externalDatabase.password="${{ secrets.MYSQL_PASSWORD }}" \
+            --set externalDatabase.name="${{ secrets.MYSQL_DATABASE }}" \
+            --wait --timeout=5m
+
+      - name: Debug on failure
+        if: failure()
+        run: |
+          echo "=== Pod status ==="
+          kubectl get pods -n ${{ env.NAMESPACE }} -o wide
+          echo ""
+          echo "=== Pod descriptions ==="
+          kubectl describe pods -n ${{ env.NAMESPACE }} -l app.kubernetes.io/name=eco-release
+          echo ""
+          echo "=== Init container logs (wait-for-db) ==="
+          for pod in $(kubectl get pods -n ${{ env.NAMESPACE }} -l app.kubernetes.io/name=eco-release -o name 2>/dev/null); do
+            echo "--- $pod ---"
+            kubectl logs "$pod" -c wait-for-db -n ${{ env.NAMESPACE }} --tail=30 2>/dev/null || echo "No logs"
+          done
+          echo ""
+          echo "=== Init container logs (migrate) ==="
+          for pod in $(kubectl get pods -n ${{ env.NAMESPACE }} -l app.kubernetes.io/name=eco-release -o name 2>/dev/null); do
+            echo "--- $pod ---"
+            kubectl logs "$pod" -c migrate -n ${{ env.NAMESPACE }} --tail=50 2>/dev/null || echo "No logs"
+          done
+          echo ""
+          echo "=== App container logs ==="
+          for pod in $(kubectl get pods -n ${{ env.NAMESPACE }} -l app.kubernetes.io/name=eco-release -o name 2>/dev/null); do
+            echo "--- $pod ---"
+            kubectl logs "$pod" -c eco-release -n ${{ env.NAMESPACE }} --tail=50 2>/dev/null || echo "No logs"
+          done
+          echo ""
+          echo "=== Events ==="
+          kubectl get events -n ${{ env.NAMESPACE }} --sort-by='.lastTimestamp' | tail -30
+
+      - name: Verify deployment
+        run: kubectl rollout status deployment/eco-release -n ${{ env.NAMESPACE }} --timeout=3m
+
+      - name: Health check
+        run: |
+          sleep 10
+          kubectl get pods -n ${{ env.NAMESPACE }} -l app.kubernetes.io/name=eco-release
+
+  notify:
+    name: Deployment Status
+    needs: [build, deploy]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report status
+        run: |
+          if [ "${{ needs.deploy.result }}" == "success" ]; then
+            echo "Production deployment successful"
+          else
+            echo "Production deployment failed or skipped"
+            exit 1
+          fi

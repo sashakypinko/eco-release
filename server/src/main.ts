@@ -11,6 +11,7 @@ import { SpaFallbackFilter } from './spa-fallback.filter';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const isDev = process.env.NODE_ENV === 'development';
+  const useVite = isDev && !process.env.SKIP_VITE;
 
   app.enableCors({
     origin: true,
@@ -25,13 +26,34 @@ async function bootstrap() {
 
   const spaFilter = new SpaFallbackFilter();
 
-  const federationPath = path.join(process.cwd(), 'dist/public/assets');
-  if (fs.existsSync(federationPath)) {
-    app.use('/assets', express.static(federationPath));
+  // Use process.cwd() for path resolution (works in both dev and bundled production)
+  const projectRoot = process.cwd();
+
+  // Check for pre-built federation bundle (Docker / production build)
+  const prebuiltFederationDir = path.resolve(projectRoot, 'dist/federation');
+  let federationDir: string | null = null;
+
+  if (fs.existsSync(path.join(prebuiltFederationDir, 'assets', 'remoteEntry.js'))) {
+    console.log('Using pre-built Module Federation bundle');
+    federationDir = prebuiltFederationDir;
+  } else {
+    // Fall back to dist/public/assets (legacy / non-Docker build layout)
+    const legacyFederationPath = path.join(projectRoot, 'dist/public/assets');
+    if (fs.existsSync(path.join(legacyFederationPath, 'remoteEntry.js'))) {
+      federationDir = path.join(projectRoot, 'dist/public');
+    }
   }
 
-  if (!isDev) {
-    const staticPath = path.join(process.cwd(), 'dist/public');
+  if (federationDir) {
+    app.use('/assets', express.static(path.join(federationDir, 'assets')));
+    const remoteEntry = path.join(federationDir, 'assets', 'remoteEntry.js');
+    if (fs.existsSync(remoteEntry)) {
+      app.use('/remoteEntry.js', express.static(remoteEntry));
+    }
+  }
+
+  if (!useVite) {
+    const staticPath = path.join(projectRoot, 'dist/public');
     if (fs.existsSync(staticPath)) {
       app.use(express.static(staticPath));
     }

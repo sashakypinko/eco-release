@@ -1,0 +1,47 @@
+replicaCount: 1
+
+image:
+  tag: override-via-pipeline
+  pullSecret: acr-secret
+
+externalDatabase:
+  enabled: true
+  host: override-via-pipeline
+  port: 3306
+  user: override-via-pipeline
+  password: override-via-pipeline
+  name: override-via-pipeline
+
+secrets:
+  create: false
+
+env:
+  PORT: "5000"
+  DB_PROVIDER: "mysql"
+
+ingress:
+  enabled: true
+  hosts:
+    - host: release-dev.eco.tetheree.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: eco-release-dev-tls
+      hosts:
+        - release-dev.eco.tetheree.com
+
+healthCheck:
+  enabled: true
+  path: /health
+
+migration:
+  enabled: true
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi

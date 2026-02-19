@@ -1,0 +1,44 @@
+replicaCount: 1
+
+image:
+  repository: eco-release
+  tag: local
+  pullPolicy: IfNotPresent
+
+externalDatabase:
+  enabled: true
+  host: host.minikube.internal
+  port: 3307
+  user: root
+  password: Password123
+  name: tetheree_admin
+
+secrets:
+  create: true
+
+sessionSecret: eco-release-jwt-secret-change-me
+
+env:
+  PORT: "5000"
+  DB_PROVIDER: "mysql"
+  NODE_ENV: "production"
+
+service:
+  type: NodePort
+
+ingress:
+  enabled: false
+
+healthCheck:
+  enabled: false
+
+migration:
+  enabled: true
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi

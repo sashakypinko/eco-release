@@ -1,0 +1,55 @@
+replicaCount: 2
+
+image:
+  tag: override-via-pipeline
+  pullSecret: acr-secret
+
+externalDatabase:
+  enabled: true
+  host: override-via-pipeline
+  port: 3306
+  user: override-via-pipeline
+  password: override-via-pipeline
+  name: override-via-pipeline
+
+secrets:
+  create: false
+
+env:
+  PORT: "5000"
+  DB_PROVIDER: "mysql"
+  VIDEO_WIDGET_BASE_URL: "https://video-widgets.tetheree.com"
+
+ingress:
+  enabled: true
+  hosts:
+    - host: release.eco.tetheree.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: eco-release-tls
+      hosts:
+        - release.eco.tetheree.com
+
+healthCheck:
+  enabled: true
+  path: /health
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 500m
+    memory: 512Mi
+
+migration:
+  enabled: true
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  capabilities:
+    drop:
+      - ALL

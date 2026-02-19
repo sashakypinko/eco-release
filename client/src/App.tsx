@@ -3,6 +3,7 @@ import type { RemoteApp, RemoteAppProps } from "./types/contracts";
 import { ApiProvider } from "./providers/ApiProvider";
 import { AuthProvider } from "./providers/AuthProvider";
 import { AppContent } from "./AppContent";
+import { setApiConfig } from "./app/baseQuery";
 import "./index.css";
 
 let root: Root | null = null;
@@ -17,6 +18,9 @@ const App: RemoteApp = {
     };
     const navigate = props?.navigate || ((path: string) => console.warn("Navigate not provided:", path));
     const apiBaseUrl = props?.apiBaseUrl || "/api";
+
+    // Set API config BEFORE rendering so the first request hits the correct backend
+    setApiConfig({ baseUrl: apiBaseUrl, token: auth.token, permissions: auth.permissions });
 
     root = createRoot(container);
     root.render(

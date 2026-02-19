@@ -1,4 +1,4 @@
-import { createContext, useContext, ReactNode, useEffect } from "react";
+import { createContext, useContext, ReactNode, useEffect, useRef } from "react";
 import { setApiConfig } from "../app/baseQuery";
 
 interface ApiContextValue {
@@ -15,6 +15,14 @@ interface ApiProviderProps {
 }
 
 export function ApiProvider({ children, baseUrl, token, permissions = [] }: ApiProviderProps) {
+  // Set config synchronously on mount so the first render already has the correct values
+  const initialized = useRef(false);
+  if (!initialized.current) {
+    setApiConfig({ baseUrl, token, permissions });
+    initialized.current = true;
+  }
+
+  // Keep config in sync when props change (e.g. token refresh)
   useEffect(() => {
     setApiConfig({ baseUrl, token, permissions });
   }, [baseUrl, token, permissions]);

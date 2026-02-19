@@ -5,6 +5,7 @@ import { AppContent } from "./AppContent";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { fetchRuntimeConfig } from "./config/runtime-config";
 import "./index.css";
 
 const mockAuth = {
@@ -22,40 +23,46 @@ const mockAuth = {
   permissions: [],
 };
 
-const mockProps = {
-  auth: mockAuth,
-  navigate: (path: string) => console.log("Navigate to:", path),
-  apiBaseUrl: "/api",
-};
-
 const sidebarStyle = {
   "--sidebar-width": "16rem",
   "--sidebar-width-icon": "3rem",
 };
 
-function StandaloneApp() {
-  return (
-    <ApiProvider baseUrl={mockProps.apiBaseUrl} token={mockProps.auth.token} permissions={mockProps.auth.permissions}>
-      <AuthProvider auth={mockProps.auth} navigate={mockProps.navigate}>
-        <SidebarProvider style={sidebarStyle as React.CSSProperties}>
-          <div className="flex h-screen w-full">
-            <AppSidebar />
-            <div className="flex flex-col flex-1 min-w-0">
-              <header className="flex items-center justify-between gap-4 p-2 border-b sticky top-0 z-50 bg-background">
-                <SidebarTrigger data-testid="button-sidebar-toggle" />
-                <ThemeToggle />
-              </header>
-              <main className="flex-1 overflow-auto">
-                <AppContent />
-              </main>
+async function main() {
+  const config = await fetchRuntimeConfig();
+
+  const mockProps = {
+    auth: mockAuth,
+    navigate: (path: string) => console.log("Navigate to:", path),
+    apiBaseUrl: config.apiBaseUrl,
+  };
+
+  function StandaloneApp() {
+    return (
+      <ApiProvider baseUrl={mockProps.apiBaseUrl} token={mockProps.auth.token} permissions={mockProps.auth.permissions}>
+        <AuthProvider auth={mockProps.auth} navigate={mockProps.navigate}>
+          <SidebarProvider style={sidebarStyle as React.CSSProperties}>
+            <div className="flex h-screen w-full">
+              <AppSidebar />
+              <div className="flex flex-col flex-1 min-w-0">
+                <header className="flex items-center justify-between gap-4 p-2 border-b sticky top-0 z-50 bg-background">
+                  <SidebarTrigger data-testid="button-sidebar-toggle" />
+                  <ThemeToggle />
+                </header>
+                <main className="flex-1 overflow-auto">
+                  <AppContent />
+                </main>
+              </div>
             </div>
-          </div>
-        </SidebarProvider>
-      </AuthProvider>
-    </ApiProvider>
-  );
+          </SidebarProvider>
+        </AuthProvider>
+      </ApiProvider>
+    );
+  }
+
+  const container = document.getElementById("root")!;
+  const root = createRoot(container);
+  root.render(<StandaloneApp />);
 }
 
-const container = document.getElementById("root")!;
-const root = createRoot(container);
-root.render(<StandaloneApp />);
+main();

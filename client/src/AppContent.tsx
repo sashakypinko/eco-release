@@ -3,6 +3,7 @@ import { useHashLocation } from "wouter/use-hash-location";
 import { useEffect } from "react";
 import { Provider } from "react-redux";
 import { store } from "@/app/store";
+import './index.css';
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";

@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "eco-release.fullname" . }}-config
+  labels:
+    {{- include "eco-release.labels" . | nindent 4 }}
+data: {}
+  # Add non-sensitive configuration here
+  # EXAMPLE_KEY: "example-value"

@@ -38,4 +38,10 @@ healthCheck:
 migration:
   enabled: false
 
-resources: {}
+resources:
+  limits:
+    cpu: 250m
+    memory: 256Mi
+  requests:
+    cpu: 10m
+    memory: 32Mi

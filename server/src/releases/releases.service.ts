@@ -221,7 +221,7 @@ export class ReleasesService {
       .leftJoin(schema.products, eq(schema.releases.productId, schema.products.id))
       .leftJoin(schema.users, eq(schema.releases.userId, schema.users.id))
       .where(whereClause)
-      .orderBy(asc(schema.releases.sortOrder), desc(schema.releases.createdAt))
+      .orderBy(desc(schema.releases.createdAt))
       .limit(200);
 
     const data: any[] = [];
@@ -247,16 +247,13 @@ export class ReleasesService {
     const statusChanges: Array<{ id: number; status: string; environment: string }> = [];
 
     for (const item of items) {
-      const updateData: any = { sortOrder: item.sort_order };
+      // sortOrder column not yet in remote DB — only update status for now
       if (item.status) {
-        updateData.status = item.status;
-      }
-      await (this.db as any)
-        .update(schema.releases)
-        .set(updateData)
-        .where(eq(schema.releases.id, item.id));
+        await (this.db as any)
+          .update(schema.releases)
+          .set({ status: item.status })
+          .where(eq(schema.releases.id, item.id));
 
-      if (item.status) {
         const [release] = await (this.db as any)
           .select()
           .from(schema.releases)

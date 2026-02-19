@@ -67,7 +67,6 @@ const releases = (0, import_mysql_core.mysqlTable)("releases", {
   productId: (0, import_mysql_core.bigint)("product_id", { mode: "number", unsigned: true }),
   workOrderId: (0, import_mysql_core.bigint)("work_order_id", { mode: "number", unsigned: true }),
   userId: (0, import_mysql_core.bigint)("user_id", { mode: "number", unsigned: true }),
-  sortOrder: (0, import_mysql_core.int)("sort_order").default(0),
   slackNotificationTimestamp: (0, import_mysql_core.varchar)("slack_notification_timestamp", { length: 255 }),
   createdAt: (0, import_mysql_core.timestamp)("created_at").default(import_drizzle_orm.sql`CURRENT_TIMESTAMP`),
   updatedAt: (0, import_mysql_core.timestamp)("updated_at").default(import_drizzle_orm.sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`)

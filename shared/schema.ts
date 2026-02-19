@@ -43,7 +43,6 @@ export const releases = mysqlTable("releases", {
   productId: bigint("product_id", { mode: "number", unsigned: true }),
   workOrderId: bigint("work_order_id", { mode: "number", unsigned: true }),
   userId: bigint("user_id", { mode: "number", unsigned: true }),
-  sortOrder: int("sort_order").default(0),
   slackNotificationTimestamp: varchar("slack_notification_timestamp", { length: 255 }),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),

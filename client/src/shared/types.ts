@@ -56,7 +56,7 @@ export interface Release {
   productId: number | null;
   workOrderId: number | null;
   userId: number | null;
-  sortOrder: number;
+  sortOrder?: number;
   createdAt: string;
   latestStatus?: string;
   product?: Product;

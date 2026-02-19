@@ -45,11 +45,9 @@ async function bootstrap() {
   }
 
   if (federationDir) {
+    // Serve federation assets at root so chunks like __federation_expose_*.js resolve correctly
+    app.use(express.static(path.join(federationDir, 'assets')));
     app.use('/assets', express.static(path.join(federationDir, 'assets')));
-    const remoteEntry = path.join(federationDir, 'assets', 'remoteEntry.js');
-    if (fs.existsSync(remoteEntry)) {
-      app.use('/remoteEntry.js', express.static(remoteEntry));
-    }
   }
 
   if (!useVite) {

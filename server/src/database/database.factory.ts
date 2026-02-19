@@ -54,23 +54,7 @@ export async function closeDatabase(): Promise<void> {
 }
 
 export async function runMigrations(): Promise<void> {
-  if (!mysqlPool) return;
-  try {
-    const conn = await mysqlPool.getConnection();
-    try {
-      const [cols] = await conn.query(
-        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'releases' AND COLUMN_NAME = 'sort_order'`
-      );
-      if ((cols as any[]).length === 0) {
-        await conn.query(`ALTER TABLE releases ADD COLUMN sort_order INT DEFAULT 0`);
-        console.log('Added sort_order column to releases table');
-      }
-    } finally {
-      conn.release();
-    }
-  } catch (error) {
-    console.error('Migration check failed:', error);
-  }
+  // Placeholder for future Drizzle migrations
 }
 
 export async function testConnection(): Promise<boolean> {

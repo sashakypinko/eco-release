@@ -95,7 +95,7 @@ jobs:
             --from-literal=MYSQL_HOST="${{ secrets.MYSQL_HOST }}" \
             --from-literal=MYSQL_PORT="${{ secrets.MYSQL_PORT }}" \
             --from-literal=SESSION_SECRET="${{ secrets.SESSION_SECRET }}" \
-            --from-literal=NODE_ENV="production" \
+            --from-literal=NODE_ENV="development" \
             --namespace=${{ env.NAMESPACE }} \
             --dry-run=client -o yaml | kubectl apply -f -
 
@@ -114,8 +114,11 @@ jobs:
             --namespace=${{ env.NAMESPACE }} \
             -f helm/app/values-dev.yaml \
             --set image.tag=dev-${GITHUB_SHA::7} \
-            --set externalDatabase.host=${{ secrets.MYSQL_HOST }} \
-            --set externalDatabase.port=${{ secrets.MYSQL_PORT }} \
+            --set externalDatabase.host="${{ secrets.MYSQL_HOST }}" \
+            --set externalDatabase.port="${{ secrets.MYSQL_PORT }}" \
+            --set externalDatabase.user="${{ secrets.MYSQL_USER }}" \
+            --set externalDatabase.password="${{ secrets.MYSQL_PASSWORD }}" \
+            --set externalDatabase.name="${{ secrets.MYSQL_DATABASE }}" \
             --wait --timeout=5m
 
       - name: Debug on failure

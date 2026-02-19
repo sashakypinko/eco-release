@@ -34,14 +34,14 @@ ingress:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     traefik.ingress.kubernetes.io/router.middlewares: ""
   hosts:
-    - host: release.eco.tetheree.com
+    - host: release.eco.tetheree.io
       paths:
         - path: /
           pathType: Prefix
   tls:
     - secretName: eco-release-tls
       hosts:
-        - release.eco.tetheree.com
+        - release.eco.tetheree.io
 
 healthCheck:
   enabled: false

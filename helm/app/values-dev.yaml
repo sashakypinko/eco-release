@@ -22,14 +22,14 @@ env:
 ingress:
   enabled: true
   hosts:
-    - host: release-dev.eco.tetheree.com
+    - host: release-dev.eco.tetheree.io
       paths:
         - path: /
           pathType: Prefix
   tls:
     - secretName: eco-release-dev-tls
       hosts:
-        - release-dev.eco.tetheree.com
+        - release-dev.eco.tetheree.io
 
 healthCheck:
   enabled: true

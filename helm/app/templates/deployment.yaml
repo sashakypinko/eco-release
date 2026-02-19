@@ -48,8 +48,8 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - |
-              echo "Running migrations..."
-              npx tsx node_modules/typeorm/cli.js migration:run -d server/src/database/typeorm.datasource.ts
+              echo "Running Drizzle migrations..."
+              node node_modules/drizzle-kit/bin.cjs migrate
               echo "Migrations complete (exit code: $?)"
           env:
             - name: DB_PROVIDER

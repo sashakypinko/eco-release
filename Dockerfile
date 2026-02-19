@@ -15,6 +15,8 @@ RUN npm run build:federation
 RUN mv dist/public dist/federation
 # 4. Rebuild client to dist/public
 RUN npx vite build
+# 5. Ensure migrations directory exists (may be empty initially)
+RUN mkdir -p migrations
 
 # ── Production stage ──
 FROM node:20-alpine AS runner
@@ -25,6 +27,9 @@ ENV PORT=5000
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/server/node_modules ./server/node_modules
 COPY --from=builder /app/dist ./dist
+# Include Drizzle migration files and config for K8s init container migrations
+COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts
+COPY --from=builder /app/migrations ./migrations
 
 EXPOSE 5000
 CMD ["node", "dist/index.cjs"]

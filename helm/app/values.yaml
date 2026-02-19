@@ -45,7 +45,7 @@ ingress:
 
 healthCheck:
   enabled: false
-  path: /health
+  path: /api/health
 
 resources:
   limits:

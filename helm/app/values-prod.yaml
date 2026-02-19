@@ -34,7 +34,7 @@ ingress:
 
 healthCheck:
   enabled: true
-  path: /health
+  path: /api/health
 
 resources:
   limits:
@@ -45,7 +45,7 @@ resources:
     memory: 512Mi
 
 migration:
-  enabled: true
+  enabled: false
 
 securityContext:
   runAsNonRoot: true

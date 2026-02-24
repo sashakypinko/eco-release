@@ -1,4 +1,4 @@
-replicaCount: 2
+replicaCount: 1
 
 image:
   tag: override-via-pipeline
@@ -38,18 +38,11 @@ healthCheck:
 
 resources:
   limits:
-    cpu: 1000m
-    memory: 1Gi
+    cpu: 200m
+    memory: 256Mi
   requests:
-    cpu: 500m
-    memory: 512Mi
+    cpu: 50m
+    memory: 128Mi
 
 migration:
   enabled: false
-
-securityContext:
-  runAsNonRoot: true
-  runAsUser: 1000
-  capabilities:
-    drop:
-      - ALL

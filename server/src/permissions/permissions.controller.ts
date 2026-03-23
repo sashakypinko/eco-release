@@ -1,5 +1,15 @@
 import { Controller, Get, Query } from '@nestjs/common';
 
+interface Module {
+  name: string;
+  scope: string;
+  expose: string;
+}
+
+const modules: Module[] = [
+  { name: "Release", scope: 'releaseManager', expose: './App' }
+];
+
 const permissionRegistry = [
   {
     key: "release:view",
@@ -95,5 +105,10 @@ export class PermissionsController {
       return permissionRegistry.filter((p) => p.scope === scope);
     }
     return permissionRegistry;
+  }
+
+  @Get('modules/list')
+  modulesList() {
+    return modules;
   }
 }
